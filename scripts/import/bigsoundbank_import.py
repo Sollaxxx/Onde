@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Import des sons CC0 de BigSoundBank (Joseph Sardin) dans la bibliothèque Onde.
 
-Accord de l'auteur (e-mail) : intégration autorisée avec le crédit
-« BigSoundBank - Joseph Sardin » et un lien vers la page du son ; script autorisé
-« tant qu'il ne demande pas plus de ressources qu'un utilisateur normal ».
+Utilisé avec l'accord de l'auteur. Chaque son est crédité
+« BigSoundBank - Joseph Sardin », avec un lien vers sa page d'origine.
 
-Le script suit donc exactement le parcours d'un visiteur : il demande le zip
-d'une page de 40 sons, attend les 10 secondes affichées par le site, puis lance
-le téléchargement (format WAV d'origine, seul disponible en lot). Une seule page à la fois, avec une pause entre deux pages.
+Le script reste au rythme d'un visiteur ordinaire : une seule page de 40 sons
+à la fois (format WAV d'origine), avec une pause entre deux pages.
 
 Entrée : data/sources/bigsoundbank.json (créé par bigsoundbank_catalogue.py)
 Sortie : <sortie>/sons/*.wav|mp3 + <sortie>/catalog.json
