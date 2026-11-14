@@ -219,6 +219,38 @@ fn library_dir(app: AppHandle) -> Result<String, String> {
     Ok(library_root(&app)?.to_string_lossy().into_owned())
 }
 
+/// Adresse qui reçoit les retours des testeurs (fonction du site Onde).
+const FEEDBACK: &str = "https://onde-nis.pages.dev/api/retour";
+
+/// Envoie un retour (bug, idée…) avec la version d'Onde et le système.
+#[tauri::command]
+async fn send_feedback(app: AppHandle, kind: String, message: String, email: String) -> Result<(), String> {
+    let body = serde_json::json!({
+        "kind": kind,
+        "message": message,
+        "email": email,
+        "version": app.package_info().version.to_string(),
+        "os": format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
+    });
+    let res = http()?
+        .post(FEEDBACK)
+        .header("Content-Type", "application/json")
+        .body(body.to_string())
+        .timeout(Duration::from_secs(20))
+        .send()
+        .await
+        .map_err(|_| "Pas de connexion au serveur Onde.".to_string())?;
+    if res.status().is_success() {
+        return Ok(());
+    }
+    let text = res.text().await.unwrap_or_default();
+    let msg = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v["error"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| "Le message n'a pas pu partir.".into());
+    Err(msg)
+}
+
 /// Dossier proposé par défaut (Documents/Onde), affiché à l'écran d'accueil.
 #[tauri::command]
 fn default_library_dir(app: AppHandle) -> Result<String, String> {
@@ -291,9 +323,17 @@ pub fn run() {
             if let Err(e) = app.handle().plugin(tauri_plugin_updater::Builder::new().build()) {
                 eprintln!("Mises à jour désactivées : {e}");
             }
+            // La fenêtre démarre cachée : l'interface l'affiche une fois prête (pas de flash blanc).
+            // Filet de sécurité : si l'interface ne l'a pas fait au bout de 4 secondes, on l'affiche.
+            if let Some(win) = app.get_webview_window("main") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(4));
+                    let _ = win.show();
+                });
+            }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }
