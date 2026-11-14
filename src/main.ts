@@ -1,7 +1,7 @@
 import "./styles.css";
 import * as api from "./api";
 import { formatDuration, normalize, search } from "./search";
-import type { Sound, Theme, UpdateInfo, View } from "./types";
+import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 
 // ---------- État ----------
 const store = {
@@ -29,6 +29,9 @@ const state = {
   intOpen: false,
   update: null as UpdateInfo | null,
   screen: "biblio" as "biblio" | "reglages",
+  origin: "test" as Catalog["origin"],
+  cdn: "",
+  limit: 150, // nombre de résultats affichés, augmenté par « Afficher plus »
   version: "0.1.0",
 };
 
@@ -248,12 +251,14 @@ function sidebar(): string {
     <div class="nav"><p class="eyebrow">Catégories UCS</p>
       ${[...cats].sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([cat, { code }]) => `<button data-cat="${esc(cat)}" aria-current="${state.category === cat}"><span>${esc(cat)}</span><span class="mono">${code}</span></button>`).join("")}
     </div>
-    <div class="folder"><span class="eyebrow">Dossier local</span><span class="path">${esc(state.libDir)}</span><button class="link-btn" data-act="open-folder">Ouvrir le dossier</button></div>
+    <div class="folder"><span class="eyebrow">Bibliothèque · ${state.origin === "en ligne" ? "en ligne" : state.origin === "cache" ? "hors ligne" : "sons de test"}</span><span class="path" style="margin-bottom:8px">${state.catalog.length} sons</span><span class="eyebrow">Dossier local</span><span class="path">${esc(state.libDir)}</span><button class="link-btn" data-act="open-folder">Ouvrir le dossier</button></div>
   </nav>`;
 }
 
 function mainList(list: Sound[]): string {
-  const filters = [null, ...new Set(state.catalog.map((s) => s.category))].slice(0, 7);
+  const counts = new Map<string, number>();
+  for (const s of state.catalog) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+  const filters = [null, ...[...counts].sort((a, b) => b[1] - a[1]).map(([c]) => c)].slice(0, 8);
   return `<main class="main">
     <div class="searchbar">${ICON.search}
       <label for="q" class="sr">Rechercher un son</label>
@@ -265,7 +270,8 @@ function mainList(list: Sound[]): string {
       <span class="count mono">${list.length} ${list.length > 1 ? "SONS" : "SON"}</span>
     </div>
     <div class="list" role="listbox" aria-label="Résultats">
-      ${list.length ? list.map(row).join("") : `<p class="empty">${emptyText()}</p>`}
+      ${list.length ? list.slice(0, state.limit).map(row).join("") : `<p class="empty">${emptyText()}</p>`}
+      ${list.length > state.limit ? `<button class="more" data-act="more">Afficher plus (${list.length - state.limit} autres sons)</button>` : ""}
     </div>
   </main>`;
 }
@@ -302,13 +308,15 @@ function detail(s: Sound): string {
       <span class="mono" id="time">00:00.00 / ${formatDuration(s.durationMs)}</span>
       <button class="sq-btn" data-act="fav" aria-pressed="${fav}" aria-label="${fav ? "Retirer des favoris" : "Ajouter aux favoris"}">${fav ? ICON.starOn : ICON.star}</button>
     </div>
+    ${s.description ? `<p class="desc">${esc(s.description)}</p>` : ""}
     <dl class="facts">
       <div><dt>Format</dt><dd>${esc(s.format)}</dd></div>
       <div><dt>Catégorie</dt><dd>${esc(s.category)}</dd></div>
-      <div><dt>Licence</dt><dd>${esc(s.license)}</dd></div>
+      <div><dt>Licence</dt><dd>${s.license === "CC0" ? "CC0 · sans crédit obligatoire" : esc(s.license)}</dd></div>
       <div><dt>Code UCS</dt><dd>${s.code}</dd></div>
     </dl>
     <div class="tags">${s.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>
+    ${s.credit ? `<p class="credit">Son : <button class="link-btn" data-act="source" title="Ouvrir la page du son">${esc(s.credit)} ↗</button></p>` : ""}
     <div class="actions">
       <button class="primary" data-drag="${s.id}">Glissez-moi dans votre timeline<span aria-hidden="true">⤓</span></button>
       <button class="secondary" data-act="reveal">Afficher dans le dossier</button>
@@ -327,12 +335,20 @@ function minibar(s: Sound): string {
 }
 
 // ---------- Lecture ----------
+const inflight = new Map<string, Promise<string>>();
+
 async function localPath(s: Sound): Promise<string> {
   const known = state.paths.get(s.id);
   if (known) return known;
-  const p = await api.ensureLocal(s.id);
-  if (p) state.paths.set(s.id, p);
-  return p;
+  let job = inflight.get(s.id);
+  if (!job) {
+    job = api.ensureLocal(s.id).then(
+      (p) => { if (p) state.paths.set(s.id, p); inflight.delete(s.id); return p; },
+      (e) => { inflight.delete(s.id); throw e; },
+    );
+    inflight.set(s.id, job);
+  }
+  return job;
 }
 
 async function togglePlay(id: string): Promise<void> {
@@ -341,9 +357,13 @@ async function togglePlay(id: string): Promise<void> {
   if (state.playingId === id && !audio.paused) { audio.pause(); render(); return; }
   state.selId = id;
   try {
-    const path = await localPath(s); // le son arrive sur le disque pendant qu'on l'écoute
     if (state.playingId !== id) {
-      audio.src = await api.audioUrl(s, path);
+      if (state.cdn) {
+        audio.src = api.streamUrl(state.cdn, s); // la lecture démarre tout de suite…
+        void localPath(s).catch(() => {});      // …pendant que le fichier arrive sur le disque
+      } else {
+        audio.src = await api.audioUrl(s, await localPath(s));
+      }
       state.playingId = id;
     }
     await audio.play();
@@ -375,6 +395,7 @@ audio.addEventListener("ended", () => render());
 // ---------- Glisser-déposer vers le logiciel de montage ----------
 let pending: { id: string; x: number; y: number } | null = null;
 let dragging = false;
+let mouseDown = false;
 
 root.addEventListener("pointerdown", (e) => {
   const target = e.target as HTMLElement;
@@ -383,6 +404,7 @@ root.addEventListener("pointerdown", (e) => {
   if (!el) return;
   const id = el.dataset.drag ?? el.dataset.id!;
   pending = { id, x: e.clientX, y: e.clientY };
+  mouseDown = true;
   const s = byId(id);
   if (s) void localPath(s); // on prépare le fichier dès qu'on l'attrape
 });
@@ -395,7 +417,10 @@ root.addEventListener("pointermove", async (e) => {
   if (!s) return;
   dragging = true;
   try {
+    const ready = state.paths.has(s.id);
+    if (!ready) toast("Téléchargement du son…");
     const path = await localPath(s);
+    if (!ready && !mouseDown) { toast("Son prêt : attrapez-le à nouveau pour le glisser."); return; }
     await api.dragOut([path]);
   } catch (err) {
     toast(api.inTauri ? `Glisser impossible : ${err instanceof Error ? err.message : err}` : "Le glisser-déposer vers un logiciel fonctionne dans l'application Onde, pas dans le navigateur.");
@@ -404,7 +429,7 @@ root.addEventListener("pointermove", async (e) => {
   }
 });
 
-window.addEventListener("pointerup", () => { pending = null; });
+window.addEventListener("pointerup", () => { pending = null; mouseDown = false; });
 
 // ---------- Actions ----------
 root.addEventListener("click", async (e) => {
@@ -415,8 +440,8 @@ root.addEventListener("click", async (e) => {
   const catBtn = t.closest<HTMLElement>("[data-cat]");
 
   if (state.intOpen && !t.closest(".popover") && act !== "integrations") { state.intOpen = false; render(); }
-  if (view) { state.view = view; state.category = null; render(); return; }
-  if (catBtn) { state.category = catBtn.dataset.cat || null; render(); return; }
+  if (view) { state.view = view; state.category = null; state.limit = 150; render(); return; }
+  if (catBtn) { state.category = catBtn.dataset.cat || null; state.limit = 150; render(); return; }
 
   switch (act) {
     case "play": if (rowEl) await togglePlay(rowEl.dataset.id!); return;
@@ -440,6 +465,12 @@ root.addEventListener("click", async (e) => {
     case "update-install": if (state.update) { toast("Téléchargement de la mise à jour…"); await state.update.install(); } return;
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
+    case "more": state.limit += 300; render(); return;
+    case "source": {
+      const s = byId(state.selId);
+      if (s?.sourceUrl) { try { await api.openUrl(s.sourceUrl); } catch { toast("Impossible d'ouvrir la page."); } }
+      return;
+    }
     case "goto": document.getElementById(t.closest<HTMLElement>("[data-goto]")!.dataset.goto!)?.scrollIntoView({ behavior: "smooth", block: "start" }); return;
     case "theme-set": state.theme = t.closest<HTMLElement>("[data-value]")!.dataset.value as Theme; store.set("onde.theme", state.theme); render(); return;
     case "choose-folder": {
@@ -465,7 +496,7 @@ root.addEventListener("dblclick", (e) => {
 
 root.addEventListener("input", (e) => {
   const t = e.target as HTMLInputElement;
-  if (t.id === "q") { state.query = t.value; render(); }
+  if (t.id === "q") { state.query = t.value; state.limit = 150; render(); }
 });
 
 function toggleFav(): void {
@@ -507,12 +538,17 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if
 // ---------- Démarrage ----------
 async function start(): Promise<void> {
   try {
-    [state.catalog, state.libDir, state.version] = await Promise.all([api.getCatalog(), api.libraryDir(), api.appVersion()]);
+    let cat: Catalog;
+    [cat, state.libDir, state.version] = await Promise.all([api.getCatalog(), api.libraryDir(), api.appVersion()]);
+    state.catalog = cat.sounds;
+    state.cdn = cat.cdn;
+    state.origin = cat.origin;
+    if (cat.origin === "cache") toast("Pas de connexion : bibliothèque enregistrée sur ce PC.");
   } catch (e) {
     root.innerHTML = `<p class="empty" style="padding:40px">Impossible de charger la bibliothèque : ${esc(String(e))}</p>`;
     return;
   }
-  state.catalog.sort((a, b) => normalize(a.title).localeCompare(normalize(b.title)));
+  state.catalog.sort((a, b) => normalize(a.title).localeCompare(normalize(b.title), "fr"));
   state.selId = state.catalog[0]?.id ?? null;
   render();
   state.update = await api.checkForUpdate();

@@ -214,3 +214,10 @@ button { cursor: pointer; }
 .about span { font-size: 13px; opacity: 0.88; }
 .about .badge { background: var(--blue-ink); color: var(--blue); opacity: 1; }
 @media (max-width: 900px) { .settings { grid-template-columns: minmax(0, 1fr); } .settings .side { display: none; } .keys { grid-template-columns: minmax(0, 1fr); } }
+
+/* Bibliothèque en ligne */
+.more { display: block; width: 100%; min-height: 48px; margin: 8px 0 16px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); font-weight: 600; }
+.more:hover { border-color: var(--ink); }
+.desc { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-2); user-select: text; }
+.credit { margin: 0; font-size: 12.5px; color: var(--muted); }
+.credit .link-btn { font-size: 12.5px; }
