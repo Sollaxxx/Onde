@@ -6,6 +6,8 @@
 // Tout est dessiné dans le repère de la mini-timeline de l'accueil (220 × 64),
 // pour que la dernière étape soit un simple changement d'échelle.
 
+import { liveIntroSound } from "./sonIntro";
+
 const W = 220;
 const EASE = "cubic-bezier(0.16, 1, 0.3, 1)";
 const IN_OUT = "cubic-bezier(0.65, 0, 0.35, 1)";
@@ -71,7 +73,10 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   const qa = (s: string) => [...svg.querySelectorAll<SVGElement>(s)];
 
   let skipped = false;
-  const skip = () => { skipped = true; host.getAnimations({ subtree: true }).forEach((a) => a.finish()); };
+  const audio = liveIntroSound();
+  await audio?.ready;
+  const sfx = (fn: (s: NonNullable<typeof audio>["sound"]) => void) => { if (audio && !skipped) fn(audio.sound); };
+  const skip = () => { skipped = true; audio?.sound.stop(); host.getAnimations({ subtree: true }).forEach((a) => a.finish()); };
   host.addEventListener("pointerdown", skip);
   const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" || e.key === "Enter" || e.key === " ") skip(); };
   window.addEventListener("keydown", onKey);
@@ -90,6 +95,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   for (const g of qa(".i-ticks, .i-clips > rect, .i-band, .ib")) g.style.opacity = "0";
 
   // 1. Le mot se dessine
+  sfx((s) => s.strokes());
   strokes.forEach((s, i) => {
     s.style.strokeDasharray = "1";
     s.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 750, delay: 120 + i * 110, easing: EASE, ...fill });
@@ -97,6 +103,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
 
   // 2. La tête de lecture tombe dans le « d »
   await wait(skipped ? 0 : 650);
+  sfx((s) => s.land());
   // La tête et la barre apparaissent ensemble, d'un seul geste.
   head.animate(
     [{ opacity: 0, transform: "translate(0, 14.5px) scale(0.4)" }, { opacity: 1, transform: "translate(0, 14.5px) scale(1)" }],
@@ -109,6 +116,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
 
   // 3. Les lettres s'effacent, la tête s'étire, la timeline se construit
   await wait(skipped ? 0 : 380);
+  sfx((s) => s.build(0.95));
   q<SVGGElement>(".i-word").animate([{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(6px)" }], { duration: 500, easing: EASE, ...fill });
   head.animate([{ transform: "translate(0, 14.5px)" }, { transform: "translate(0, 1px) scale(0.91)" }], { duration: 700, easing: IN_OUT, ...fill });
   stem.animate(
@@ -122,6 +130,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   const band = q<SVGRectElement>(".i-band");
   band.style.transformOrigin = origin;
   band.animate([{ opacity: 1, transform: "scaleX(0)" }, { opacity: 1, transform: "scaleX(1)" }], { duration: 800, delay: 250, easing: EASE, ...fill });
+  [0, 1, 2].forEach((i) => setTimeout(() => sfx((s) => s.clip()), 470 + i * 90));
   qa(".i-clips > rect").forEach((c, i) => {
     c.style.transformOrigin = `${[0, 73, 123][i]}px 0`;
     c.animate([{ opacity: 1, transform: "scaleX(0)" }, { opacity: 1, transform: "scaleX(1)" }], { duration: 600, delay: 450 + i * 90, easing: EASE, ...fill });
@@ -134,6 +143,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
 
   // 4. La tête de lecture rembobine jusqu'au début
   await wait(skipped ? 0 : 1250);
+  sfx((s) => s.rewind(0.75));
   await done(ph.animate([{ transform: `translate(${STEM_X}px, 0)` }, { transform: "translate(26px, 0)" }], { duration: 750, easing: IN_OUT, ...fill }));
 
   // 5. La timeline se range dans le panneau bleu, la partie blanche s'ouvre
@@ -152,6 +162,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
     const right = window.innerWidth - side.getBoundingClientRect().right;
     const top = side.getBoundingClientRect().top;
     svg.style.transformOrigin = "0 0";
+    sfx((s) => s.resolve());
     const moving = svg.animate([{ transform: "none" }, { transform: `translate(${tx}px, ${ty}px) scale(${k})` }], { duration: 900, easing: IN_OUT, ...fill });
     host.animate([{ clipPath: "inset(0 0 0 0)" }, { clipPath: `inset(${top}px ${right}px 0 0)` }], { duration: 900, delay: 120, easing: IN_OUT, ...fill });
     content?.animate([{ opacity: 0, transform: "translateY(16px)", filter: "blur(8px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }], { duration: 700, delay: 600, easing: EASE, fill: "backwards" });
@@ -162,4 +173,5 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   }
   window.removeEventListener("keydown", onKey);
   host.remove();
+  if (audio && !skipped) setTimeout(() => audio.sound.stop(), 2600); // laisse sonner la fin, puis libère l'audio
 }

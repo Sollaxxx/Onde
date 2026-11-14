@@ -22,7 +22,8 @@
         "dragDropEnabled": false,
         "center": true,
         "visible": false,
-        "backgroundColor": "#002FA7"
+        "backgroundColor": "#002FA7",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
       }
     ],
     "security": {
