@@ -84,8 +84,9 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
 
   // État de départ
   ph.style.transform = `translate(${STEM_X}px, 0)`;
-  head.style.transform = `translate(0, -40px)`;
-  stem.style.transform = `translate(-2.3px, 19.4px) scale(4.6, 0)`;
+  head.style.transform = `translate(0, 6px)`;
+  head.style.opacity = "0";
+  stem.style.transform = `translate(0px, 19.4px) scale(4.6, 0)`;
   for (const g of qa(".i-ticks, .i-clips > rect, .i-band, .ib")) g.style.opacity = "0";
 
   // 1. Le mot se dessine
@@ -96,10 +97,11 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
 
   // 2. La tête de lecture tombe dans le « d »
   await wait(skipped ? 0 : 650);
-  head.animate([{ transform: "translate(0, -40px)" }, { transform: "translate(0, 14.5px)" }], { duration: 520, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)", ...fill });
+  // La tête et la barre apparaissent ensemble, d'un seul geste.
+  head.animate([{ opacity: 0, transform: "translate(0, 6px)" }, { opacity: 1, transform: "translate(0, 14.5px)" }], { duration: 620, easing: EASE, ...fill });
   await done(stem.animate(
-    [{ transform: "translate(-2.3px, 19.4px) scale(4.6, 0)" }, { transform: "translate(-2.3px, 19.4px) scale(4.6, 23.3)" }],
-    { duration: 420, delay: 260, easing: EASE, ...fill },
+    [{ transform: "translate(0px, 19.4px) scale(4.6, 0)" }, { transform: "translate(0px, 19.4px) scale(4.6, 23.3)" }],
+    { duration: 620, easing: EASE, ...fill },
   ));
 
   // 3. Les lettres s'effacent, la tête s'étire, la timeline se construit
@@ -107,7 +109,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   q<SVGGElement>(".i-word").animate([{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(6px)" }], { duration: 500, easing: EASE, ...fill });
   head.animate([{ transform: "translate(0, 14.5px)" }, { transform: "translate(0, 1px) scale(0.91)" }], { duration: 700, easing: IN_OUT, ...fill });
   stem.animate(
-    [{ transform: "translate(-2.3px, 19.4px) scale(4.6, 23.3)" }, { transform: "translate(-0.75px, 5px) scale(1.5, 59)" }],
+    [{ transform: "translate(0px, 19.4px) scale(4.6, 23.3)" }, { transform: "translate(0px, 5px) scale(1.5, 59)" }],
     { duration: 700, easing: IN_OUT, ...fill },
   );
   const origin = `${STEM_X}px 0`;
