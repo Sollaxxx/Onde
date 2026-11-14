@@ -1,12 +1,15 @@
 // Sound design de l'animation d'ouverture, entièrement synthétisé (aucun fichier audio).
-// Chaque geste de l'animation a son son :
-//   strokes()  le mot « onde » se dessine : frottements de feutre
-//   land()     la tête de lecture se pose dans le « d » : tic net + petit choc grave
-//   build()    la timeline se construit : souffle qui monte
+//
+// Ligne directrice : une nappe continue en ré démarre avec le premier trait et ne
+// s'interrompt jamais. Chaque geste de l'animation la transforme au lieu de lancer
+// un son isolé, et les petits sons (tic, clics) se posent par-dessus :
+//   strokes()  la nappe naît, des frottements de feutre dessinent le mot
+//   land()     la tête de lecture se pose : tic + choc grave, la nappe s'éclaire
+//   build()    la timeline se construit : la nappe s'ouvre et monte, un souffle l'accompagne
 //   clip()     un clip apparaît : petit clic boisé
-//   rewind()   la tête de lecture rembobine : bande qui défile à l'envers
-//   resolve()  tout se range dans l'accueil : accord doux qui signe la fin
-// Chaque méthode accepte un instant `at` (secondes, horloge audio) : utile pour un rendu hors ligne.
+//   rewind()   la tête rembobine : toute la nappe se tord vers le bas, comme une bande
+//   resolve()  tout se range : la nappe s'épanouit en accord, puis s'éteint lentement
+// Aucune coupure : chaque son s'éteint en fondu, et la nappe ne change de direction qu'en partant de sa valeur du moment.
 
 export interface IntroSound {
   strokes(at?: number): void;
@@ -18,225 +21,272 @@ export interface IntroSound {
   stop(): void;
 }
 
-export function makeIntroSound(ctx: BaseAudioContext, volume = 0.7): IntroSound {
+const D2 = 73.42;
+
+export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound {
   const now = (at?: number) => at ?? ctx.currentTime;
 
-  // Chaîne de sortie : compresseur doux, volume général, petite réverbération.
+  // ---- Sortie : compression douce, limiteur, volume ----
+  const glue = ctx.createDynamicsCompressor();
+  glue.threshold.value = -20;
+  glue.ratio.value = 2;
+  glue.attack.value = 0.03;
+  glue.release.value = 0.4;
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -4;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.15;
   const master = ctx.createGain();
   master.gain.value = volume;
-  const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -18;
-  comp.ratio.value = 3;
-  master.connect(comp).connect(ctx.destination);
+  glue.connect(limiter).connect(master).connect(ctx.destination);
 
   const reverb = ctx.createConvolver();
-  reverb.buffer = impulse(ctx, 2.6, 2.8);
+  reverb.buffer = impulse(ctx, 3.2, 2.4);
   const wet = ctx.createGain();
-  wet.gain.value = 0.32;
-  reverb.connect(wet).connect(master);
+  wet.gain.value = 0.45;
+  reverb.connect(wet).connect(glue);
 
-  const noise = noiseBuffer(ctx, 3);
+  const noise = noiseBuffer(ctx, 4);
 
-  /** Enveloppe : monte jusqu'à `peak` en `a` secondes, puis s'éteint en `d` secondes. */
-  function env(g: AudioParam, t: number, peak: number, a: number, d: number): void {
-    g.setValueAtTime(0.0001, t);
-    g.exponentialRampToValueAtTime(peak, t + a);
-    g.exponentialRampToValueAtTime(0.0001, t + a + d);
-  }
-
-  function out(node: AudioNode, send = 0.25): void {
-    node.connect(master);
+  function out(node: AudioNode, send = 0.25, pan = 0): void {
+    let n = node;
+    if (pan) {
+      const p = ctx.createStereoPanner();
+      p.pan.value = pan;
+      n = node.connect(p);
+    }
+    n.connect(glue);
     if (send > 0) {
       const s = ctx.createGain();
       s.gain.value = send;
-      node.connect(s).connect(reverb);
+      n.connect(s).connect(reverb);
     }
+  }
+
+  /** Fige un paramètre à sa valeur du moment avant de lui donner une nouvelle direction (sans saut). */
+  function hold(p: AudioParam, t: number): void {
+    if (typeof p.cancelAndHoldAtTime === "function") p.cancelAndHoldAtTime(t);
+    else { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); }
+  }
+
+  /** Attaque rapide puis extinction en douceur (jamais de coupure nette). */
+  function pluck(g: AudioParam, t: number, peak: number, attack: number, tau: number): void {
+    g.setValueAtTime(0, t);
+    g.linearRampToValueAtTime(peak, t + attack);
+    g.setTargetAtTime(0, t + attack, tau);
   }
 
   function noiseSrc(t: number, dur: number): AudioBufferSourceNode {
     const src = ctx.createBufferSource();
     src.buffer = noise;
-    src.start(t, Math.random() * 1.5, dur);
+    src.loop = true;
+    src.start(t, Math.random() * 2);
+    src.stop(t + dur);
     return src;
   }
 
-  return {
+  // ---- La nappe : le fil conducteur ----
+  const bedLP = ctx.createBiquadFilter();
+  bedLP.type = "lowpass";
+  bedLP.Q.value = 0.9;
+  bedLP.frequency.value = 180;
+  const bed = ctx.createGain();
+  bed.gain.value = 0;
+  bedLP.connect(bed);
+  out(bed, 0.5);
+
+  const voices: OscillatorNode[] = [];
+  function voice(freq: number, type: OscillatorType, level: number, pan: number, detune = 0): GainNode {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = freq;
+    o.detune.value = detune;
+    const g = ctx.createGain();
+    g.gain.value = level;
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    o.connect(g).connect(p).connect(bedLP);
+    voices.push(o);
+    return g;
+  }
+  let bedStarted = false;
+  let shimmer: GainNode | null = null;
+  let chord: GainNode[] = [];
+
+  function startBed(t: number): void {
+    if (bedStarted) return;
+    bedStarted = true;
+    voice(D2, "sawtooth", 0.22, -0.55, -7);
+    voice(D2, "sawtooth", 0.22, 0.55, 7);
+    voice(D2 * 1.5, "sawtooth", 0.1, 0, 3);          // quinte (la)
+    voice(D2 * 2, "sine", 0.35, 0);                   // octave
+    voice(D2 / 2, "sine", 0.3, 0);                    // sous-basse
+    shimmer = voice(D2 * 4, "triangle", 0, 0.3, -4);  // ré aigu, apparaît pendant la construction
+    chord = [
+      voice(D2 * 2 * 1.26, "triangle", 0, -0.35),     // fa#
+      voice(D2 * 3, "sine", 0, 0.35),                 // la
+      voice(D2 * 5.04, "sine", 0, -0.2),              // fa# aigu
+    ];
+    for (const o of voices) o.start(t);
+    bed.gain.setValueAtTime(0, t);
+    bed.gain.linearRampToValueAtTime(0.42, t + 1.1);
+    bedLP.frequency.setValueAtTime(180, t);
+    bedLP.frequency.exponentialRampToValueAtTime(520, t + 1.2);
+  }
+
+  const sound: IntroSound = {
     strokes(at) {
       const t0 = now(at);
+      startBed(t0);
       [0.12, 0.23, 0.34, 0.45, 0.56].forEach((off, i) => {
         const t = t0 + off;
-        const src = noiseSrc(t, 0.8);
+        const src = noiseSrc(t, 1.4);
         const bp = ctx.createBiquadFilter();
         bp.type = "bandpass";
-        bp.Q.value = 1.4;
-        bp.frequency.setValueAtTime(2200 + i * 260, t);
-        bp.frequency.exponentialRampToValueAtTime(3800 + i * 200, t + 0.5);
-        const hp = ctx.createBiquadFilter();
-        hp.type = "highpass";
-        hp.frequency.value = 900;
+        bp.Q.value = 1.2;
+        bp.frequency.setValueAtTime(2000 + i * 240, t);
+        bp.frequency.exponentialRampToValueAtTime(3600 + i * 200, t + 0.55);
         const g = ctx.createGain();
-        env(g.gain, t, 0.17, 0.06, 0.55);
-        src.connect(bp).connect(hp).connect(g);
-        out(g, 0.15);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.26, t + 0.07);
+        g.gain.setTargetAtTime(0, t + 0.12, 0.16);
+        src.connect(bp).connect(g);
+        out(g, 0.35, i % 2 ? 0.35 : -0.35);
       });
     },
 
     land(at) {
       const t = now(at);
-      // Tic : sinus aigu très court
+      startBed(t);
+      // Tic
       const tic = ctx.createOscillator();
-      tic.frequency.setValueAtTime(2400, t);
-      tic.frequency.exponentialRampToValueAtTime(1100, t + 0.03);
+      tic.frequency.setValueAtTime(2600, t);
+      tic.frequency.exponentialRampToValueAtTime(1200, t + 0.03);
       const gt = ctx.createGain();
-      env(gt.gain, t, 0.28, 0.002, 0.06);
+      pluck(gt.gain, t, 0.42, 0.002, 0.025);
       tic.connect(gt);
-      out(gt, 0.35);
+      out(gt, 0.5);
       tic.start(t);
-      tic.stop(t + 0.1);
+      tic.stop(t + 0.4);
       // Choc grave
       const low = ctx.createOscillator();
-      low.frequency.setValueAtTime(140, t);
-      low.frequency.exponentialRampToValueAtTime(48, t + 0.18);
+      low.frequency.setValueAtTime(150, t);
+      low.frequency.exponentialRampToValueAtTime(D2 / 2, t + 0.2);
       const gl = ctx.createGain();
-      env(gl.gain, t, 0.55, 0.004, 0.32);
+      pluck(gl.gain, t, 0.75, 0.004, 0.12);
       low.connect(gl);
-      out(gl, 0.1);
+      out(gl, 0.15);
       low.start(t);
-      low.stop(t + 0.4);
-      // Petit grain de bruit pour l'attaque
-      const n = noiseSrc(t, 0.05);
-      const hp = ctx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 4000;
-      const gn = ctx.createGain();
-      env(gn.gain, t, 0.12, 0.001, 0.03);
-      n.connect(hp).connect(gn);
-      out(gn, 0.2);
+      low.stop(t + 1.2);
+      // La nappe s'éclaire
+      hold(bedLP.frequency, t);
+      bedLP.frequency.exponentialRampToValueAtTime(950, t + 0.45);
+      hold(bed.gain, t);
+      bed.gain.linearRampToValueAtTime(0.5, t + 0.6);
     },
 
     build(dur, at) {
       const t = now(at);
-      // Souffle filtré qui monte
-      const src = noiseSrc(t, dur + 0.2);
+      // La nappe s'ouvre et gagne en brillance
+      hold(bedLP.frequency, t);
+      bedLP.frequency.exponentialRampToValueAtTime(4200, t + dur);
+      hold(bed.gain, t);
+      bed.gain.linearRampToValueAtTime(0.62, t + dur);
+      shimmer?.gain.setValueAtTime(0, t);
+      shimmer?.gain.linearRampToValueAtTime(0.16, t + dur);
+      // Souffle qui accompagne, fondu dans la nappe
+      const src = noiseSrc(t, dur + 2);
       const bp = ctx.createBiquadFilter();
       bp.type = "bandpass";
-      bp.Q.value = 2.2;
-      bp.frequency.setValueAtTime(260, t);
-      bp.frequency.exponentialRampToValueAtTime(5200, t + dur);
+      bp.Q.value = 1.8;
+      bp.frequency.setValueAtTime(400, t);
+      bp.frequency.exponentialRampToValueAtTime(6000, t + dur);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.05, t + dur * 0.3);
-      g.gain.linearRampToValueAtTime(0.2, t + dur * 0.85);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.15);
+      g.gain.linearRampToValueAtTime(0.1, t + dur * 0.4);
+      g.gain.linearRampToValueAtTime(0.28, t + dur);
+      g.gain.setTargetAtTime(0, t + dur, 0.22);
       src.connect(bp).connect(g);
-      out(g, 0.4);
-      // Nappe grave qui gonfle
-      const sub = ctx.createOscillator();
-      sub.type = "sine";
-      sub.frequency.setValueAtTime(55, t);
-      sub.frequency.linearRampToValueAtTime(73.4, t + dur);
-      const gs = ctx.createGain();
-      gs.gain.setValueAtTime(0.0001, t);
-      gs.gain.exponentialRampToValueAtTime(0.14, t + dur * 0.8);
-      gs.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.25);
-      sub.connect(gs);
-      out(gs, 0.15);
-      sub.start(t);
-      sub.stop(t + dur + 0.3);
+      out(g, 0.55);
     },
 
     clip(at) {
       const t = now(at);
       const o = ctx.createOscillator();
       o.type = "triangle";
-      o.frequency.setValueAtTime(820, t);
-      o.frequency.exponentialRampToValueAtTime(520, t + 0.04);
+      o.frequency.setValueAtTime(900, t);
+      o.frequency.exponentialRampToValueAtTime(560, t + 0.04);
       const g = ctx.createGain();
-      env(g.gain, t, 0.16, 0.002, 0.07);
+      pluck(g.gain, t, 0.3, 0.002, 0.03);
       o.connect(g);
-      out(g, 0.3);
+      out(g, 0.4, (Math.random() - 0.5) * 0.6);
       o.start(t);
-      o.stop(t + 0.12);
+      o.stop(t + 0.4);
     },
 
     rewind(dur, at) {
       const t = now(at);
-      // Bande qui défile à l'envers : dent de scie dont la hauteur chute, hachée de plus en plus lentement
-      const o = ctx.createOscillator();
-      o.type = "sawtooth";
-      o.frequency.setValueAtTime(260, t);
-      o.frequency.exponentialRampToValueAtTime(900, t + dur * 0.35);
-      o.frequency.exponentialRampToValueAtTime(90, t + dur);
+      // Toute la nappe se tord vers le bas puis revient, comme une bande qu'on rembobine
+      const steps = 64;
+      for (const o of voices) {
+        const base = o.detune.value;
+        const curve = new Float32Array(steps);
+        for (let i = 0; i < steps; i++) {
+          const x = i / (steps - 1);
+          const dip = Math.sin(Math.PI * x);                          // descend puis remonte
+          const wobble = Math.sin(x * Math.PI * 14) * 0.18 * (1 - x); // vacillement de bande
+          curve[i] = base - 700 * dip * (1 + wobble);
+        }
+        o.detune.setValueCurveAtTime(curve, t, dur);
+      }
+      hold(bedLP.frequency, t);
+      bedLP.frequency.exponentialRampToValueAtTime(1300, t + dur * 0.5);
+      bedLP.frequency.exponentialRampToValueAtTime(2200, t + dur);
+      // Souffle de bande
+      const n = noiseSrc(t, dur + 1);
       const bp = ctx.createBiquadFilter();
       bp.type = "bandpass";
-      bp.frequency.value = 1300;
-      bp.Q.value = 1.6;
-      const chop = ctx.createGain();
-      chop.gain.value = 0.5;
-      const lfo = ctx.createOscillator();
-      lfo.type = "square";
-      lfo.frequency.setValueAtTime(34, t);
-      lfo.frequency.exponentialRampToValueAtTime(9, t + dur);
-      const depth = ctx.createGain();
-      depth.gain.value = 0.5;
-      lfo.connect(depth).connect(chop.gain);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.13, t + 0.08);
-      g.gain.setValueAtTime(0.13, t + dur * 0.7);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      o.connect(bp).connect(chop).connect(g);
-      out(g, 0.2);
-      // Souffle de bande
-      const n = noiseSrc(t, dur);
-      const hp = ctx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 3500;
+      bp.frequency.setValueAtTime(5000, t);
+      bp.frequency.exponentialRampToValueAtTime(1500, t + dur);
+      bp.Q.value = 0.8;
       const gn = ctx.createGain();
-      gn.gain.setValueAtTime(0.0001, t);
-      gn.gain.exponentialRampToValueAtTime(0.07, t + 0.1);
-      gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      n.connect(hp).connect(gn);
-      out(gn, 0.1);
-      o.start(t);
-      o.stop(t + dur + 0.05);
-      lfo.start(t);
-      lfo.stop(t + dur + 0.05);
-      // Arrêt de la bande : petit clac
-      this.clip(t + dur - 0.02);
+      gn.gain.setValueAtTime(0, t);
+      gn.gain.linearRampToValueAtTime(0.12, t + 0.1);
+      gn.gain.setTargetAtTime(0, t + dur * 0.8, 0.08);
+      n.connect(bp).connect(gn);
+      out(gn, 0.3);
+      // Arrêt de la bande
+      sound.clip(t + dur - 0.03);
     },
 
     resolve(at) {
       const t = now(at);
-      // Accord de ré, doux et chaud, avec une cloche discrète au-dessus
-      const lp = ctx.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.setValueAtTime(900, t);
-      lp.frequency.exponentialRampToValueAtTime(2400, t + 0.6);
-      const pad = ctx.createGain();
-      pad.gain.setValueAtTime(0.0001, t);
-      pad.gain.exponentialRampToValueAtTime(0.1, t + 0.35);
-      pad.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
-      lp.connect(pad);
-      out(pad, 0.55);
-      for (const [f, type] of [[146.83, "sine"], [220, "sine"], [293.66, "triangle"], [369.99, "sine"], [440, "sine"]] as const) {
-        const o = ctx.createOscillator();
-        o.type = type;
-        o.frequency.value = f;
-        o.detune.value = (Math.random() - 0.5) * 8;
-        o.connect(lp);
-        o.start(t);
-        o.stop(t + 3.5);
-      }
-      for (const [f, peak] of [[1174.66, 0.09], [1174.66 * 2.76, 0.02]] as const) {
+      // La nappe s'épanouit en accord de ré majeur, puis s'éteint lentement
+      hold(bedLP.frequency, t);
+      bedLP.frequency.exponentialRampToValueAtTime(3000, t + 0.5);
+      bedLP.frequency.exponentialRampToValueAtTime(700, t + 4);
+      chord.forEach((g, i) => {
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime([0.16, 0.14, 0.07][i], t + 0.35 + i * 0.06);
+      });
+      shimmer?.gain.setTargetAtTime(0.06, t, 0.4);
+      hold(bed.gain, t);
+      bed.gain.linearRampToValueAtTime(0.7, t + 0.35);
+      bed.gain.linearRampToValueAtTime(0.55, t + 0.9);
+      bed.gain.exponentialRampToValueAtTime(0.0005, t + 5.5);
+      for (const o of voices) o.stop(t + 7);
+      // Cloche discrète au-dessus
+      for (const [f, peak, pan] of [[D2 * 16, 0.13, -0.15], [D2 * 16 * 2.76, 0.03, 0.2], [D2 * 24, 0.05, 0.3]] as const) {
         const b = ctx.createOscillator();
         b.frequency.value = f;
         const gb = ctx.createGain();
-        env(gb.gain, t + 0.05, peak, 0.004, 1.8);
+        pluck(gb.gain, t + 0.04, peak, 0.004, 0.5);
         b.connect(gb);
-        out(gb, 0.7);
-        b.start(t + 0.05);
-        b.stop(t + 2);
+        out(gb, 0.8, pan);
+        b.start(t + 0.04);
+        b.stop(t + 4);
       }
     },
 
@@ -244,10 +294,11 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.7): IntroSound 
       const t = ctx.currentTime;
       master.gain.cancelScheduledValues(t);
       master.gain.setValueAtTime(master.gain.value, t);
-      master.gain.linearRampToValueAtTime(0, t + 0.2);
-      if ("close" in ctx) setTimeout(() => void (ctx as AudioContext).close().catch(() => {}), 400);
+      master.gain.setTargetAtTime(0, t, 0.08);
+      if ("close" in ctx) setTimeout(() => void (ctx as AudioContext).close().catch(() => {}), 600);
     },
   };
+  return sound;
 }
 
 function noiseBuffer(ctx: BaseAudioContext, seconds: number): AudioBuffer {
@@ -257,7 +308,7 @@ function noiseBuffer(ctx: BaseAudioContext, seconds: number): AudioBuffer {
   return buf;
 }
 
-/** Réponse impulsionnelle synthétique : bruit stéréo qui s'éteint, comme une petite salle. */
+/** Réponse impulsionnelle synthétique : bruit stéréo qui s'éteint, comme une salle douce. */
 function impulse(ctx: BaseAudioContext, seconds: number, decay: number): AudioBuffer {
   const len = Math.floor(ctx.sampleRate * seconds);
   const buf = ctx.createBuffer(2, len, ctx.sampleRate);
