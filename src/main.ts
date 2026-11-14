@@ -4,6 +4,7 @@ import { formatDuration, normalize, search } from "./search";
 import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 import { introWanted, playIntro } from "./intro";
+import { playOutro } from "./outro";
 
 // ---------- État ----------
 const store = {
@@ -305,16 +306,15 @@ async function finishAccueil(query = ""): Promise<void> {
     catch (e) { toast(`Dossier impossible à utiliser : ${e instanceof Error ? e.message : e}`); }
   }
   store.set("onde.accueil", 1);
-  state.screen = "biblio";
-  state.query = query;
-  state.view = "tout";
-  state.category = null;
-  render();
-  if (query) {
-    const first = visibleSounds()[0];
-    if (first) state.selId = first.id;
+  await playOutro(() => {
+    state.screen = "biblio";
+    state.query = query;
+    state.view = "tout";
+    state.category = null;
+    if (query) state.selId = visibleSounds()[0]?.id ?? state.selId;
     render();
-  } else document.getElementById("q")?.focus();
+  });
+  if (!query) document.getElementById("q")?.focus();
 }
 
 async function accueilAction(act: string, t: HTMLElement): Promise<void> {
