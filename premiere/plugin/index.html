@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="main.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"><i></i></span>
+        <b>Onde</b>
+        <span class="tag">BÊTA</span>
+      </div>
+      <span id="count" class="mono muted"></span>
+    </header>
+
+    <div class="search">
+      <input id="q" type="text" placeholder="Décrivez un son : porte, whoosh, pluie…" />
+    </div>
+
+    <div id="list" class="list"></div>
+
+    <footer class="foot">
+      <span id="status" class="muted">Chargement de la bibliothèque…</span>
+    </footer>
+
+    <video id="player" class="player"></video>
+  </body>
+</html>

@@ -120,6 +120,15 @@ fn library_root(app: &AppHandle) -> Result<PathBuf, String> {
     }
 }
 
+/// Indique au panneau Premiere où se trouve la bibliothèque, pour que les deux partagent les mêmes fichiers.
+/// Fichier texte d'une ligne : <dossier de configuration d'Onde>/bibliotheque.txt
+fn write_library_hint(app: &AppHandle, dir: &Path) {
+    if let Ok(cfg) = app.path().app_config_dir() {
+        let _ = fs::create_dir_all(&cfg);
+        let _ = fs::write(cfg.join("bibliotheque.txt"), dir.to_string_lossy().as_bytes());
+    }
+}
+
 /// Autorise le lecteur audio de l'interface à lire les fichiers de ce dossier.
 fn allow_playback(app: &AppHandle, dir: &Path) {
     if let Err(e) = app.asset_protocol_scope().allow_directory(dir, true) {
@@ -144,6 +153,7 @@ fn set_library_dir(app: AppHandle, path: Option<String>) -> Result<String, Strin
     settings.library_dir = if dir == default { None } else { Some(dir.to_string_lossy().into_owned()) };
     save_settings(&app, &settings)?;
     allow_playback(&app, &dir);
+    write_library_hint(&app, &dir);
     Ok(dir.to_string_lossy().into_owned())
 }
 
@@ -316,6 +326,7 @@ pub fn run() {
             // Le dossier choisi dans les Réglages doit rester lisible par le lecteur audio.
             if let Ok(dir) = library_root(app.handle()) {
                 allow_playback(app.handle(), &dir);
+                write_library_hint(app.handle(), &dir);
             }
             // Le module de mise à jour ne doit jamais empêcher l'app de démarrer,
             // par exemple tant que la clé publique n'est pas encore configurée.
