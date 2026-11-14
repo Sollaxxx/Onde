@@ -84,7 +84,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
 
   // État de départ
   ph.style.transform = `translate(${STEM_X}px, 0)`;
-  head.style.transform = `translate(0, 6px)`;
+  head.style.transform = `translate(0, 14.5px)`;
   head.style.opacity = "0";
   stem.style.transform = `translate(0px, 19.4px) scale(4.6, 0)`;
   for (const g of qa(".i-ticks, .i-clips > rect, .i-band, .ib")) g.style.opacity = "0";
@@ -98,7 +98,10 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   // 2. La tête de lecture tombe dans le « d »
   await wait(skipped ? 0 : 650);
   // La tête et la barre apparaissent ensemble, d'un seul geste.
-  head.animate([{ opacity: 0, transform: "translate(0, 6px)" }, { opacity: 1, transform: "translate(0, 14.5px)" }], { duration: 620, easing: EASE, ...fill });
+  head.animate(
+    [{ opacity: 0, transform: "translate(0, 14.5px) scale(0.4)" }, { opacity: 1, transform: "translate(0, 14.5px) scale(1)" }],
+    { duration: 620, easing: EASE, ...fill },
+  );
   await done(stem.animate(
     [{ transform: "translate(0px, 19.4px) scale(4.6, 0)" }, { transform: "translate(0px, 19.4px) scale(4.6, 23.3)" }],
     { duration: 620, easing: EASE, ...fill },
