@@ -28,6 +28,8 @@ const state = {
   paths: new Map<string, string>(),
   intOpen: false,
   update: null as UpdateInfo | null,
+  screen: "biblio" as "biblio" | "reglages",
+  version: "0.1.0",
 };
 
 const audio = new Audio();
@@ -58,6 +60,7 @@ const ICON = {
   starOn: `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3l2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 16.9 6.4 20l1.3-6.2L3 9.5l6.3-.7z"/></svg>`,
   search: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>`,
   plug: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/></svg>`,
+  gear: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
   logo: `<svg width="20" height="20" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#002FA7"/><rect x="12" y="34" width="96" height="58" fill="#FFFFFF"/><g fill="#002FA7"><rect x="22" y="50" width="12" height="26"/><rect x="40" y="42" width="12" height="42"/><rect x="76" y="46" width="12" height="34"/></g><polygon points="50,4 78,4 78,20 64,32 50,20" fill="#E2231A"/><rect x="58" y="26" width="12" height="84" fill="#E2231A"/></svg>`,
   word: `<svg width="52" height="20" viewBox="0 0 256 100" role="img" aria-label="Onde"><g fill="none" stroke="currentColor" stroke-width="13"><circle cx="28" cy="52" r="21.5"/><path d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/><circle cx="160" cy="52" r="21.5"/><path d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/><path d="M204.5 52H247.5"/></g><polygon points="169,0 194,0 194,10 181.5,20 169,10" fill="#E2231A"/><rect x="175" y="14" width="13" height="66" fill="#E2231A"/></svg>`,
 };
@@ -95,12 +98,13 @@ function render(): void {
   root.innerHTML = `
     ${titlebar()}
     ${state.update ? updateBanner(state.update) : "<div></div>"}
+    ${state.screen === "reglages" ? settingsScreen() : `
     <div class="body">
       ${sidebar()}
       ${mainList(list)}
       ${cur ? detail(cur) : `<aside class="detail"><p class="hint">Sélectionnez un son.</p></aside>`}
     </div>
-    ${cur ? minibar(cur) : ""}`;
+    ${cur ? minibar(cur) : ""}`}`;
 
   if (focused === "q") {
     const q = document.getElementById("q") as HTMLInputElement;
@@ -108,6 +112,81 @@ function render(): void {
     q.setSelectionRange(q.value.length, q.value.length);
   }
   syncProgress();
+}
+
+async function changeLibrary(path: string | null): Promise<void> {
+  try {
+    state.libDir = await api.setLibraryDir(path);
+    state.paths.clear(); // les prochains sons iront dans le nouveau dossier
+    toast(`Les prochains sons seront rangés dans ${state.libDir}`);
+  } catch (e) {
+    toast(`Dossier impossible à utiliser : ${e instanceof Error ? e.message : e}`);
+  }
+  render();
+}
+
+function settingsScreen(): string {
+  const sections: [string, string][] = [["r-app", "Apparence"], ["r-lib", "Dossier des sons"], ["r-keys", "Raccourcis"], ["r-upd", "Mises à jour"], ["r-about", "À propos"]];
+  const themes: [Theme, string][] = [["clair", "Clair"], ["sombre", "Sombre"], ["systeme", "Comme Windows"]];
+  const keys: [string, string][] = [["Rechercher", "CTRL K"], ["Écouter / pause", "ESPACE"], ["Son suivant / précédent", "↓ ↑"], ["Ajouter aux favoris", "F"], ["Fermer / revenir", "ÉCHAP"], ["Glisser vers la timeline", "SOURIS"]];
+  return `<div class="settings">
+    <nav class="side" aria-label="Sections des réglages">
+      <div class="nav">
+        <button data-act="back"><span>← Bibliothèque</span></button>
+        <p class="eyebrow" style="margin-top:16px">Réglages</p>
+        ${sections.map(([id, label]) => `<button data-act="goto" data-goto="${id}"><span>${label}</span></button>`).join("")}
+      </div>
+    </nav>
+    <main class="set-main">
+      <h1>Réglages</h1>
+
+      <section id="r-app" aria-labelledby="h-app">
+        <h2 id="h-app" class="eyebrow">Apparence</h2>
+        <div class="set-row">
+          <div><b>Mode</b><span>Le mode sombre est plus doux en salle de montage.</span></div>
+          <div class="segmented" role="radiogroup" aria-label="Mode d'affichage">
+            ${themes.map(([v, label]) => `<button role="radio" data-act="theme-set" data-value="${v}" aria-checked="${state.theme === v}">${label}</button>`).join("")}
+          </div>
+        </div>
+      </section>
+
+      <section id="r-lib" aria-labelledby="h-lib">
+        <h2 id="h-lib" class="eyebrow">Dossier des sons</h2>
+        <div class="set-row">
+          <div><b>Emplacement</b><span class="mono path">${esc(state.libDir)}</span></div>
+          <div class="btns">
+            <button class="secondary" data-act="open-folder">Ouvrir</button>
+            <button class="secondary strong" data-act="choose-folder">Changer…</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div><b>Revenir au dossier par défaut</b><span>Documents\\Onde. Les sons déjà utilisés restent à leur place : vos projets de montage les retrouvent toujours.</span></div>
+          <button class="secondary" data-act="reset-folder">Rétablir</button>
+        </div>
+      </section>
+
+      <section id="r-keys" aria-labelledby="h-keys">
+        <h2 id="h-keys" class="eyebrow">Raccourcis</h2>
+        <div class="keys">${keys.map(([label, k]) => `<div><span>${label}</span><span class="kbd">${k}</span></div>`).join("")}</div>
+      </section>
+
+      <section id="r-upd" aria-labelledby="h-upd">
+        <h2 id="h-upd" class="eyebrow">Mises à jour</h2>
+        <div class="set-row">
+          <div><b>Onde ${esc(state.version)} · bêta</b><span>Chaque mise à jour est signée par l'équipe Onde. Les nouveaux sons arriveront sans mise à jour de l'application.</span></div>
+          <button class="secondary strong" data-act="check-update">Rechercher une mise à jour</button>
+        </div>
+      </section>
+
+      <section id="r-about" class="about" aria-labelledby="h-about">
+        <div>
+          <h2 id="h-about">Onde ${esc(state.version)} · open-source</h2>
+          <span>Gratuit, et ça s'entend. Code publié sous licence AGPL-3.0.</span>
+        </div>
+        <span class="badge">SOUTIEN BIENTÔT</span>
+      </section>
+    </main>
+  </div>`;
 }
 
 function titlebar(): string {
@@ -118,6 +197,7 @@ function titlebar(): string {
       <button class="tb-btn tb-hide" data-act="integrations" aria-haspopup="true" aria-expanded="${state.intOpen}">${ICON.plug}Intégrations</button>
       <button class="tb-btn tb-hide" data-act="theme" aria-label="Changer de mode">${state.theme === "sombre" ? "Mode clair" : "Mode sombre"}</button>
       <button class="tb-btn" data-act="compact" aria-pressed="${state.compact}">${state.compact ? "Grande fenêtre" : "Mode compact"}</button>
+      <button class="tb-btn tb-icon" data-act="settings" aria-pressed="${state.screen === "reglages"}" aria-label="Réglages" title="Réglages">${ICON.gear}</button>
       <div class="win">
         <button data-act="win-min" aria-label="Réduire"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor"/></svg></button>
         <button data-act="win-max" aria-label="Agrandir"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
@@ -358,6 +438,22 @@ root.addEventListener("click", async (e) => {
     case "win-close": return api.windowAction("close");
     case "update-later": state.update = null; render(); return;
     case "update-install": if (state.update) { toast("Téléchargement de la mise à jour…"); await state.update.install(); } return;
+    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
+    case "back": state.screen = "biblio"; render(); return;
+    case "goto": document.getElementById(t.closest<HTMLElement>("[data-goto]")!.dataset.goto!)?.scrollIntoView({ behavior: "smooth", block: "start" }); return;
+    case "theme-set": state.theme = t.closest<HTMLElement>("[data-value]")!.dataset.value as Theme; store.set("onde.theme", state.theme); render(); return;
+    case "choose-folder": {
+      const picked = await api.chooseFolder(state.libDir);
+      if (picked) await changeLibrary(picked);
+      return;
+    }
+    case "reset-folder": await changeLibrary(null); return;
+    case "check-update": {
+      toast("Recherche d'une mise à jour…");
+      const u = await api.checkForUpdate();
+      if (u) { state.update = u; render(); } else toast("Aucune mise à jour disponible pour l'instant.");
+      return;
+    }
   }
   if (rowEl && !dragging) { state.selId = rowEl.dataset.id!; render(); }
 });
@@ -384,7 +480,13 @@ function toggleFav(): void {
 window.addEventListener("keydown", (e) => {
   const typing = (e.target as HTMLElement).tagName === "INPUT";
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("q")?.focus(); return; }
-  if (e.key === "Escape") { if (state.intOpen) { state.intOpen = false; render(); } else (document.activeElement as HTMLElement)?.blur(); return; }
+  if (e.key === "Escape") {
+    if (state.intOpen) { state.intOpen = false; render(); }
+    else if (state.screen === "reglages") { state.screen = "biblio"; render(); }
+    else (document.activeElement as HTMLElement)?.blur();
+    return;
+  }
+  if (state.screen === "reglages") return;
   if (typing && !["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
   const list = visibleSounds();
   const i = list.findIndex((s) => s.id === state.selId);
@@ -405,7 +507,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if
 // ---------- Démarrage ----------
 async function start(): Promise<void> {
   try {
-    [state.catalog, state.libDir] = await Promise.all([api.getCatalog(), api.libraryDir()]);
+    [state.catalog, state.libDir, state.version] = await Promise.all([api.getCatalog(), api.libraryDir(), api.appVersion()]);
   } catch (e) {
     root.innerHTML = `<p class="empty" style="padding:40px">Impossible de charger la bibliothèque : ${esc(String(e))}</p>`;
     return;
