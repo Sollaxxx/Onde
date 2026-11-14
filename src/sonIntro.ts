@@ -18,6 +18,10 @@ export interface IntroSound {
   clip(at?: number): void;
   rewind(dur: number, at?: number): void;
   resolve(at?: number): void;
+  /** Passage vers l'application : le rideau bleu se ferme. */
+  curtain(dur: number, at?: number): void;
+  /** Passage vers l'application : la tête de lecture balaie l'écran de gauche à droite. */
+  sweep(dur: number, at?: number): void;
   stop(): void;
 }
 
@@ -413,6 +417,42 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
         out(gb, 0.8, pan);
         b.start(t + 0.04);
         b.stop(t + 4);
+      }
+    },
+
+    curtain(dur, at) {
+      const t = now(at);
+      // Souffle sourd qui se referme, la tête de lecture de la mini-timeline arrive au bout
+      whoosh(t, dur, 1800, 260, 0.2, -0.7, 0.1);
+      const low = ctx.createOscillator();
+      low.frequency.setValueAtTime(D2, t);
+      const gl = ctx.createGain();
+      gl.gain.setValueAtTime(0, t);
+      gl.gain.linearRampToValueAtTime(0.28, t + dur);
+      gl.gain.setTargetAtTime(0, t + dur, 0.35);
+      low.connect(gl);
+      out(gl, 0.3);
+      low.start(t);
+      low.stop(t + dur + 2.5);
+      for (let k = 0; k < 6; k++) grain(t + k * (dur / 6), 2400 + k * 300, 0.08, 0.006, -0.6 + k * 0.12, 3.5, 0.3);
+      // Tic quand le rideau est fermé
+      grain(t + dur, 3200, 0.2, 0.01, 0, 3, 0.5);
+      ping(t + dur, D2 * 16, 0.06, 0.25, 0, 0.7);
+    },
+
+    sweep(dur, at) {
+      const t = now(at);
+      // La tête de lecture traverse l'écran : souffle qui va de gauche à droite
+      whoosh(t, dur, 500, 5200, 0.26, -0.9, 0.9);
+      // Petits clics au passage de chaque élément de l'application
+      for (let k = 0; k < 18; k++) {
+        const x = k / 17;
+        const tt = t + dur * (1 - Math.pow(1 - x, 2.2)) * 0.95;
+        grain(tt, 2600 + x * 3000, 0.11, 0.006, -0.9 + 1.8 * x, 3.5, 0.35);
+      }
+      // Arrivée : accord doux de ré et cloche
+      for (const [f, a, pan] of [[D2 * 4, 0.07, -0.3], [D2 * 5.04, 0.05, 0.3], [D2 * 6, 0.05, 0], [D2 * 16, 0.07, 0.2], [D2 * 24, 0.035, -0.2]] as const) {
+        ping(t + dur * 0.85, f, a, f > 1000 ? 0.45 : 0.9, pan, 0.8);
       }
     },
 
