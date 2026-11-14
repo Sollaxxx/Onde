@@ -1,7 +1,7 @@
 {
   "name": "onde",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Onde — bruitages et musiques libres de droits, à glisser directement dans votre timeline.",
   "license": "AGPL-3.0-only",
   "type": "module",
