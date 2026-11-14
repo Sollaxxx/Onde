@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Onde",
+  "version": "0.1.0",
+  "identifier": "app.onde.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Onde",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 380,
+        "minHeight": 560,
+        "decorations": false,
+        "dragDropEnabled": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$DOCUMENT/Onde/**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "category": "Video",
+    "shortDescription": "Bruitages et musiques libres de droits pour monteurs",
+    "copyright": "Onde — projet open-source (AGPL-3.0)",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": ["resources/samples/*", "resources/drag-icon.png"],
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "nsis": { "languages": ["French", "English"], "displayLanguageSelector": false }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REMPLACER_PAR_LA_CLE_PUBLIQUE_ONDE",
+      "endpoints": ["https://github.com/sollaxxx/onde/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  }
+}
