@@ -219,6 +219,12 @@ fn library_dir(app: AppHandle) -> Result<String, String> {
     Ok(library_root(&app)?.to_string_lossy().into_owned())
 }
 
+/// Dossier proposé par défaut (Documents/Onde), affiché à l'écran d'accueil.
+#[tauri::command]
+fn default_library_dir(app: AppHandle) -> Result<String, String> {
+    Ok(default_root(&app)?.to_string_lossy().into_owned())
+}
+
 /// Rend le son disponible sur le disque et renvoie son chemin :
 /// téléchargement depuis la bibliothèque en ligne, ou copie d'un son de test.
 /// Un son déjà présent n'est jamais retéléchargé ni modifié.
@@ -287,7 +293,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, set_library_dir, ensure_local, drag_icon_path])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

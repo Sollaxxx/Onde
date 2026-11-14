@@ -26,6 +26,11 @@ export async function libraryDir(): Promise<string> {
   return inTauri ? invoke<string>("library_dir") : "Documents\\Onde";
 }
 
+/** Dossier proposé par défaut (Documents\\Onde), sans rien changer aux réglages. */
+export async function defaultLibraryDir(): Promise<string> {
+  return inTauri ? invoke<string>("default_library_dir") : "Documents\\Onde";
+}
+
 /** Rend le son disponible sur le disque (copie ou téléchargement) et renvoie son chemin. */
 export async function ensureLocal(id: string): Promise<string> {
   return inTauri ? invoke<string>("ensure_local", { id }) : "";

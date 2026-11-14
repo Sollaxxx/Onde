@@ -2,6 +2,7 @@ import "./styles.css";
 import * as api from "./api";
 import { formatDuration, normalize, search } from "./search";
 import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
+import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 
 // ---------- État ----------
 const store = {
@@ -28,7 +29,8 @@ const state = {
   paths: new Map<string, string>(),
   intOpen: false,
   update: null as UpdateInfo | null,
-  screen: "biblio" as "biblio" | "reglages",
+  screen: "biblio" as "biblio" | "reglages" | "accueil",
+  accueil: { step: 0, defaultDir: "", customDir: null, useCustom: false } as Accueil,
   origin: "test" as Catalog["origin"],
   cdn: "",
   limit: 150, // nombre de résultats affichés, augmenté par « Afficher plus »
@@ -97,6 +99,11 @@ function render(): void {
   if (!list.some((s) => s.id === state.selId)) state.selId = list[0]?.id ?? state.selId;
   const cur = byId(state.selId);
   const focused = document.activeElement?.id;
+
+  if (state.screen === "accueil") {
+    root.innerHTML = accueilScreen(state.accueil, state.theme, ICON.word, winButtons());
+    return;
+  }
 
   root.innerHTML = `
     ${titlebar()}
@@ -186,7 +193,7 @@ function settingsScreen(): string {
           <h2 id="h-about">Onde ${esc(state.version)} · open-source</h2>
           <span>Gratuit, et ça s'entend. Code publié sous licence AGPL-3.0.</span>
         </div>
-        <span class="badge">SOUTIEN BIENTÔT</span>
+        <div class="btns"><button class="secondary" data-act="replay-accueil">Revoir l'accueil</button><span class="badge">SOUTIEN BIENTÔT</span></div>
       </section>
     </main>
   </div>`;
@@ -201,14 +208,72 @@ function titlebar(): string {
       <button class="tb-btn tb-hide" data-act="theme" aria-label="Changer de mode">${state.theme === "sombre" ? "Mode clair" : "Mode sombre"}</button>
       <button class="tb-btn" data-act="compact" aria-pressed="${state.compact}">${state.compact ? "Grande fenêtre" : "Mode compact"}</button>
       <button class="tb-btn tb-icon" data-act="settings" aria-pressed="${state.screen === "reglages"}" aria-label="Réglages" title="Réglages">${ICON.gear}</button>
-      <div class="win">
-        <button data-act="win-min" aria-label="Réduire"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor"/></svg></button>
-        <button data-act="win-max" aria-label="Agrandir"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
-        <button data-act="win-close" class="close" aria-label="Fermer"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
-      </div>
+      ${winButtons()}
     </div>
     ${state.intOpen ? integrations() : ""}
   </header>`;
+}
+
+function winButtons(): string {
+  return `<div class="win">
+        <button data-act="win-min" aria-label="Réduire"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor"/></svg></button>
+        <button data-act="win-max" aria-label="Agrandir"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
+        <button data-act="win-close" class="close" aria-label="Fermer"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
+      </div>`;
+}
+
+// ---------- Écran d'accueil ----------
+async function openAccueil(): Promise<void> {
+  const a = state.accueil;
+  a.step = 0;
+  a.defaultDir = await api.defaultLibraryDir().catch(() => "Documents\\Onde");
+  a.useCustom = !!state.libDir && state.libDir !== a.defaultDir;
+  a.customDir = a.useCustom ? state.libDir : null;
+  state.screen = "accueil";
+  render();
+}
+
+async function finishAccueil(query = ""): Promise<void> {
+  const a = state.accueil;
+  const wanted = a.useCustom && a.customDir ? a.customDir : null;
+  if ((wanted ?? a.defaultDir) !== state.libDir) {
+    try { state.libDir = await api.setLibraryDir(wanted); state.paths.clear(); }
+    catch (e) { toast(`Dossier impossible à utiliser : ${e instanceof Error ? e.message : e}`); }
+  }
+  store.set("onde.accueil", 1);
+  state.screen = "biblio";
+  state.query = query;
+  state.view = "tout";
+  state.category = null;
+  render();
+  if (query) {
+    const first = visibleSounds()[0];
+    if (first) state.selId = first.id;
+    render();
+  } else document.getElementById("q")?.focus();
+}
+
+async function accueilAction(act: string, t: HTMLElement): Promise<void> {
+  const a = state.accueil;
+  switch (act) {
+    case "ob-theme": state.theme = t.closest<HTMLElement>("[data-value]")!.dataset.value as Theme; store.set("onde.theme", state.theme); break;
+    case "ob-dir-default": a.useCustom = false; break;
+    case "ob-dir-pick": {
+      const picked = await api.chooseFolder(a.customDir ?? a.defaultDir);
+      if (picked) { a.customDir = picked; a.useCustom = true; }
+      else if (a.customDir) a.useCustom = true;
+      break;
+    }
+    case "ob-back": a.step = Math.max(0, a.step - 1); break;
+    case "ob-next":
+      if (a.step === STEPS.length - 1) return finishAccueil();
+      a.step++;
+      break;
+    case "ob-skip": return finishAccueil();
+    case "ob-try": return finishAccueil(t.closest<HTMLElement>("[data-q]")!.dataset.q!);
+  }
+  render();
+  document.querySelector<HTMLElement>(act === "ob-next" || act === "ob-back" ? ".ob-next" : `[data-act="${act}"]`)?.focus();
 }
 
 function integrations(): string {
@@ -443,6 +508,8 @@ root.addEventListener("click", async (e) => {
   if (view) { state.view = view; state.category = null; state.limit = 150; render(); return; }
   if (catBtn) { state.category = catBtn.dataset.cat || null; state.limit = 150; render(); return; }
 
+  if (act?.startsWith("ob-")) { await accueilAction(act, t); return; }
+
   switch (act) {
     case "play": if (rowEl) await togglePlay(rowEl.dataset.id!); return;
     case "play-sel": if (state.selId) await togglePlay(state.selId); return;
@@ -465,6 +532,7 @@ root.addEventListener("click", async (e) => {
     case "update-install": if (state.update) { toast("Téléchargement de la mise à jour…"); await state.update.install(); } return;
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
+    case "replay-accueil": await openAccueil(); return;
     case "more": state.limit += 300; render(); return;
     case "source": {
       const s = byId(state.selId);
@@ -509,6 +577,10 @@ function toggleFav(): void {
 
 // Raccourcis : Ctrl K chercher · Espace écouter · ↑ ↓ naviguer · F favori · Échap fermer
 window.addEventListener("keydown", (e) => {
+  if (state.screen === "accueil") {
+    if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "BUTTON") { e.preventDefault(); void accueilAction("ob-next", document.body); }
+    return;
+  }
   const typing = (e.target as HTMLElement).tagName === "INPUT";
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("q")?.focus(); return; }
   if (e.key === "Escape") {
@@ -550,7 +622,7 @@ async function start(): Promise<void> {
   }
   state.catalog.sort((a, b) => normalize(a.title).localeCompare(normalize(b.title), "fr"));
   state.selId = state.catalog[0]?.id ?? null;
-  render();
+  if (!store.get("onde.accueil", 0)) await openAccueil(); else render();
   state.update = await api.checkForUpdate();
   if (state.update) render();
 }
