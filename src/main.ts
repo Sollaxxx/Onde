@@ -195,7 +195,7 @@ function settingsScreen(): string {
 function titlebar(): string {
   return `
   <header class="titlebar">
-    <div class="brand" data-tauri-drag-region>${ICON.logo}${ICON.word}<span class="tag">BÊTA 0.1</span></div>
+    <div class="brand" data-tauri-drag-region>${ICON.logo}${ICON.word}<span class="tag">BÊTA ${esc(state.version)}</span></div>
     <div class="tb-actions">
       <button class="tb-btn tb-hide" data-act="integrations" aria-haspopup="true" aria-expanded="${state.intOpen}">${ICON.plug}Intégrations</button>
       <button class="tb-btn tb-hide" data-act="theme" aria-label="Changer de mode">${state.theme === "sombre" ? "Mode clair" : "Mode sombre"}</button>

@@ -1,0 +1,47 @@
+name: Publier une version
+
+# Lancement à la main : onglet Actions → « Publier une version » → Run workflow.
+# Compile l'installateur Windows, le signe avec la clé de mise à jour,
+# puis crée la version (Release) vMAJ.MIN.CORR avec le fichier latest.json
+# que les applications installées consultent pour se mettre à jour.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Compiler, signer et publier
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Onde v__VERSION__
+          releaseBody: |
+            Téléchargez **Onde_x.y.z_x64-setup.exe** ci-dessous pour installer Onde sur Windows.
+            Si Onde est déjà installé, il vous propose cette version tout seul.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

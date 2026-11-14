@@ -82,17 +82,22 @@ onde/
 └── scripts/generer-sons-test.py  Regénère les sons de test (ffmpeg)
 ```
 
-## Activer les mises à jour automatiques
+## Publier une nouvelle version
 
-1. Générez la clé de signature, **une seule fois** :
+Les applications installées vérifient au démarrage s'il existe une version plus récente, signée avec la clé d'Onde, et proposent « Installer et redémarrer ».
+
+1. Changer le numéro de version :
    ```bash
-   npm run tauri signer generate -- -w ~/.tauri/onde.key
+   node scripts/version.mjs 0.3.0
    ```
-2. Copiez la **clé publique** dans `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`), et remplacez `COMPTE_GITHUB` dans `endpoints`.
-3. Passez `bundle.createUpdaterArtifacts` à `true`.
-4. Sur GitHub, ajoutez la **clé privée** dans les secrets du dépôt (`TAURI_SIGNING_PRIVATE_KEY`).
+2. Faire un commit et le fusionner dans `main`.
+3. Sur GitHub, onglet **Actions → Publier une version → Run workflow**.
 
-⚠️ La clé privée ne doit **jamais** être dans le dépôt. Gardez-en deux sauvegardes : sans elle, les apps déjà installées ne pourront plus être mises à jour.
+GitHub compile l'installateur, le signe, puis crée la version `v0.3.0` avec le fichier `latest.json` que lisent les applications.
+
+La clé privée de signature est rangée dans les secrets du dépôt (`TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). ⚠️ Elle ne doit **jamais** être dans le dépôt, et doit être sauvegardée à deux endroits : sans elle, les applications déjà installées ne peuvent plus être mises à jour.
+
+Pour fabriquer un installateur sur votre PC (`npm run tauri build`), les deux mêmes variables doivent être définies dans votre terminal. Pour développer (`npm run tauri dev`), elles ne sont pas nécessaires.
 
 ## Licence
 

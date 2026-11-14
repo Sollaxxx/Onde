@@ -1,6 +1,6 @@
 [package]
 name = "onde"
-version = "0.1.0"
+version = "0.2.0"
 description = "Onde — bruitages et musiques libres de droits pour monteurs"
 edition = "2021"
 license = "AGPL-3.0-only"

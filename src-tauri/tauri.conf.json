@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Onde",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "app.onde.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -52,7 +52,7 @@
       "resources/samples/*",
       "resources/drag-icon.png"
     ],
-    "createUpdaterArtifacts": false,
+    "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
         "languages": [
@@ -65,7 +65,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REMPLACER_PAR_LA_CLE_PUBLIQUE_ONDE",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg4NzE2OTY5NzE0Q0ZCOTMKUldTVCsweHhhV2x4aUlxKzYvWFJucldzWXBLNVFoeXFrcWNwWUI1cWJqVzh1SUpXVjJTaGlyWGEK",
       "endpoints": [
         "https://github.com/sollaxxx/onde/releases/latest/download/latest.json"
       ],
