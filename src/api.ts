@@ -54,6 +54,25 @@ export async function openFolder(path: string): Promise<void> {
   await openPath(path);
 }
 
+/** Fenêtre de choix de dossier de Windows. */
+export async function chooseFolder(current: string): Promise<string | null> {
+  if (!inTauri) return null;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({ directory: true, multiple: false, defaultPath: current || undefined, title: "Choisir le dossier des sons Onde" });
+  return typeof picked === "string" ? picked : null;
+}
+
+/** Change le dossier des sons (null = dossier par défaut) et renvoie le dossier retenu. */
+export async function setLibraryDir(path: string | null): Promise<string> {
+  return inTauri ? invoke<string>("set_library_dir", { path }) : path ?? "Documents\\Onde";
+}
+
+export async function appVersion(): Promise<string> {
+  if (!inTauri) return "0.1.0";
+  const { getVersion } = await import("@tauri-apps/api/app");
+  return getVersion();
+}
+
 export async function windowAction(action: "minimize" | "maximize" | "close"): Promise<void> {
   if (!inTauri) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
