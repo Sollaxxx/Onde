@@ -3,6 +3,7 @@ import * as api from "./api";
 import { formatDuration, normalize, search } from "./search";
 import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
+import { introWanted, playIntro } from "./intro";
 
 // ---------- État ----------
 const store = {
@@ -30,6 +31,7 @@ const state = {
   intOpen: false,
   update: null as UpdateInfo | null,
   screen: "biblio" as "biblio" | "reglages" | "accueil",
+  feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
   accueil: { step: 0, defaultDir: "", customDir: null, useCustom: false } as Accueil,
   origin: "test" as Catalog["origin"],
   cdn: "",
@@ -66,6 +68,7 @@ const ICON = {
   search: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>`,
   plug: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/></svg>`,
   gear: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
+  chat: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h16v12H9l-5 4z"/></svg>`,
   logo: `<svg width="20" height="20" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#002FA7"/><rect x="12" y="34" width="96" height="58" fill="#FFFFFF"/><g fill="#002FA7"><rect x="22" y="50" width="12" height="26"/><rect x="40" y="42" width="12" height="42"/><rect x="76" y="46" width="12" height="34"/></g><polygon points="50,4 78,4 78,20 64,32 50,20" fill="#E2231A"/><rect x="58" y="26" width="12" height="84" fill="#E2231A"/></svg>`,
   word: `<svg width="52" height="20" viewBox="0 0 256 100" role="img" aria-label="Onde"><g fill="none" stroke="currentColor" stroke-width="13"><circle cx="28" cy="52" r="21.5"/><path d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/><circle cx="160" cy="52" r="21.5"/><path d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/><path d="M204.5 52H247.5"/></g><polygon points="169,0 194,0 194,10 181.5,20 169,10" fill="#E2231A"/><rect x="175" y="14" width="13" height="66" fill="#E2231A"/></svg>`,
 };
@@ -114,8 +117,14 @@ function render(): void {
       ${mainList(list)}
       ${cur ? detail(cur) : `<aside class="detail"><p class="hint">Sélectionnez un son.</p></aside>`}
     </div>
-    ${cur ? minibar(cur) : ""}`}`;
+    ${cur ? minibar(cur) : ""}`}
+    ${state.feedback ? feedbackDialog() : ""}`;
 
+  if (state.feedback && focused?.startsWith("fb-")) {
+    const el = document.getElementById(focused) as HTMLInputElement | HTMLTextAreaElement | null;
+    el?.focus();
+    if (el) el.setSelectionRange(el.value.length, el.value.length);
+  }
   if (focused === "q") {
     const q = document.getElementById("q") as HTMLInputElement;
     q.focus();
@@ -207,6 +216,7 @@ function titlebar(): string {
       <button class="tb-btn tb-hide" data-act="integrations" aria-haspopup="true" aria-expanded="${state.intOpen}">${ICON.plug}Intégrations</button>
       <button class="tb-btn tb-hide" data-act="theme" aria-label="Changer de mode">${state.theme === "sombre" ? "Mode clair" : "Mode sombre"}</button>
       <button class="tb-btn" data-act="compact" aria-pressed="${state.compact}">${state.compact ? "Grande fenêtre" : "Mode compact"}</button>
+      <button class="tb-btn tb-hide" data-act="feedback" aria-haspopup="dialog">${ICON.chat}Envoyer un retour</button>
       <button class="tb-btn tb-icon" data-act="settings" aria-pressed="${state.screen === "reglages"}" aria-label="Réglages" title="Réglages">${ICON.gear}</button>
       ${winButtons()}
     </div>
@@ -220,6 +230,60 @@ function winButtons(): string {
         <button data-act="win-max" aria-label="Agrandir"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
         <button data-act="win-close" class="close" aria-label="Fermer"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
       </div>`;
+}
+
+// ---------- Envoyer un retour ----------
+function feedbackDialog(): string {
+  const f = state.feedback!;
+  const kinds: [api.FeedbackKind, string][] = [["bug", "Un bug"], ["idee", "Une idée"], ["autre", "Autre chose"]];
+  const ph = f.kind === "bug" ? "Ce que vous faisiez, ce qui s'est passé, ce que vous attendiez…" : f.kind === "idee" ? "Ce qui vous ferait gagner du temps au montage…" : "Votre message…";
+  return `<div class="modal-bg" data-act="fb-close-bg">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fb-title">
+      <header><h2 id="fb-title">Envoyer un retour</h2><p>Onde est en bêta : chaque message est lu, et c'est comme ça qu'il s'améliore.</p></header>
+      <div class="segmented" role="radiogroup" aria-label="Type de retour">
+        ${kinds.map(([v, l]) => `<button role="radio" data-act="fb-kind" data-value="${v}" aria-checked="${f.kind === v}">${l}</button>`).join("")}
+      </div>
+      <label class="fld"><span>Message</span><textarea id="fb-msg" rows="6" maxlength="4000" placeholder="${ph}">${esc(f.message)}</textarea></label>
+      <label class="fld"><span>Votre e-mail <em>· facultatif, pour qu'on puisse vous répondre</em></span><input id="fb-mail" type="email" value="${esc(f.email)}" placeholder="vous@exemple.fr" autocomplete="email" /></label>
+      <p class="fine">La version d'Onde (${esc(state.version)}) et le système sont ajoutés automatiquement. Rien d'autre n'est envoyé.</p>
+      ${f.error ? `<p class="fb-err" role="alert">${esc(f.error)} <button class="link-btn" data-act="fb-mail">Écrire par e-mail à la place</button></p>` : ""}
+      <footer>
+        <button class="secondary" data-act="fb-close">Annuler</button>
+        <button class="solid-btn" data-act="fb-send" ${f.sending ? "disabled" : ""}>${f.sending ? "Envoi…" : "Envoyer"}</button>
+      </footer>
+    </div>
+  </div>`;
+}
+
+async function feedbackAction(act: string, t: HTMLElement): Promise<void> {
+  const f = state.feedback;
+  if (!f) return;
+  switch (act) {
+    case "fb-close-bg": if (t.classList.contains("modal-bg")) { state.feedback = null; break; } return;
+    case "fb-close": state.feedback = null; break;
+    case "fb-kind": f.kind = t.closest<HTMLElement>("[data-value]")!.dataset.value as api.FeedbackKind; break;
+    case "fb-mail": {
+      const body = `${f.message}\n\n—\nOnde ${state.version}`;
+      try { await api.openUrl(`mailto:contact.ondesound@gmail.com?subject=${encodeURIComponent("Retour sur Onde")}&body=${encodeURIComponent(body)}`); } catch { toast("Écrivez-nous à contact.ondesound@gmail.com"); }
+      return;
+    }
+    case "fb-send": {
+      if (f.message.trim().length < 3) { f.error = "Écrivez quelques mots avant d'envoyer."; break; }
+      f.sending = true; f.error = ""; render();
+      try {
+        await api.sendFeedback(f.kind, f.message.trim(), f.email.trim());
+        state.feedback = null;
+        render();
+        toast("Merci ! Votre retour est bien arrivé.");
+        return;
+      } catch (e) {
+        f.sending = false;
+        f.error = e instanceof Error ? e.message : String(e);
+      }
+      break;
+    }
+  }
+  render();
 }
 
 // ---------- Écran d'accueil ----------
@@ -509,6 +573,8 @@ root.addEventListener("click", async (e) => {
   if (catBtn) { state.category = catBtn.dataset.cat || null; state.limit = 150; render(); return; }
 
   if (act?.startsWith("ob-")) { await accueilAction(act, t); return; }
+  if (act?.startsWith("fb-")) { await feedbackAction(act, t); return; }
+  if (state.feedback) return;
 
   switch (act) {
     case "play": if (rowEl) await togglePlay(rowEl.dataset.id!); return;
@@ -532,6 +598,7 @@ root.addEventListener("click", async (e) => {
     case "update-install": if (state.update) { toast("Téléchargement de la mise à jour…"); await state.update.install(); } return;
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
+    case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
     case "replay-accueil": await openAccueil(); return;
     case "more": state.limit += 300; render(); return;
     case "source": {
@@ -565,6 +632,8 @@ root.addEventListener("dblclick", (e) => {
 root.addEventListener("input", (e) => {
   const t = e.target as HTMLInputElement;
   if (t.id === "q") { state.query = t.value; state.limit = 150; render(); }
+  if (state.feedback && t.id === "fb-msg") state.feedback.message = t.value;
+  if (state.feedback && t.id === "fb-mail") { state.feedback.email = t.value; store.set("onde.email", t.value); }
 });
 
 function toggleFav(): void {
@@ -577,6 +646,11 @@ function toggleFav(): void {
 
 // Raccourcis : Ctrl K chercher · Espace écouter · ↑ ↓ naviguer · F favori · Échap fermer
 window.addEventListener("keydown", (e) => {
+  if (state.feedback) {
+    if (e.key === "Escape") { state.feedback = null; render(); }
+    else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void feedbackAction("fb-send", document.body);
+    return;
+  }
   if (state.screen === "accueil") {
     if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "BUTTON") { e.preventDefault(); void accueilAction("ob-next", document.body); }
     return;
@@ -608,7 +682,9 @@ window.addEventListener("keydown", (e) => {
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (state.theme === "systeme") render(); });
 
 // ---------- Démarrage ----------
-async function start(): Promise<void> {
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+async function loadLibrary(): Promise<boolean> {
   try {
     let cat: Catalog;
     [cat, state.libDir, state.version] = await Promise.all([api.getCatalog(), api.libraryDir(), api.appVersion()]);
@@ -618,11 +694,33 @@ async function start(): Promise<void> {
     if (cat.origin === "cache") toast("Pas de connexion : bibliothèque enregistrée sur ce PC.");
   } catch (e) {
     root.innerHTML = `<p class="empty" style="padding:40px">Impossible de charger la bibliothèque : ${esc(String(e))}</p>`;
-    return;
+    return false;
   }
   state.catalog.sort((a, b) => normalize(a.title).localeCompare(normalize(b.title), "fr"));
   state.selId = state.catalog[0]?.id ?? null;
-  if (!store.get("onde.accueil", 0)) await openAccueil(); else render();
+  return true;
+}
+
+async function start(): Promise<void> {
+  const firstRun = !store.get("onde.accueil", 0);
+  document.documentElement.dataset.theme = state.theme === "sombre" ? "sombre" : "clair";
+
+  if (firstRun && introWanted()) {
+    // Premier lancement : l'animation démarre tout de suite, la bibliothèque charge en parallèle.
+    let ok = true;
+    const ready = loadLibrary().then(async (loaded) => { ok = loaded; if (loaded) await openAccueil(); await nextFrame(); });
+    const intro = playIntro(ready);
+    await nextFrame();
+    void api.showWindow();
+    await intro;
+    if (!ok) return;
+  } else {
+    const loaded = await loadLibrary();
+    if (loaded) { if (firstRun) await openAccueil(); else render(); }
+    await nextFrame();
+    void api.showWindow();
+    if (!loaded) return;
+  }
   state.update = await api.checkForUpdate();
   if (state.update) render();
 }

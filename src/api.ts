@@ -90,6 +90,21 @@ export async function setLibraryDir(path: string | null): Promise<string> {
   return inTauri ? invoke<string>("set_library_dir", { path }) : path ?? "Documents\\Onde";
 }
 
+/** Affiche la fenêtre (elle démarre cachée pour éviter un flash blanc). */
+export async function showWindow(): Promise<void> {
+  if (!inTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().show();
+}
+
+export type FeedbackKind = "bug" | "idee" | "autre";
+
+/** Envoie un retour à l'équipe Onde (avec la version et le système). */
+export async function sendFeedback(kind: FeedbackKind, message: string, email: string): Promise<void> {
+  if (inTauri) return invoke<void>("send_feedback", { kind, message, email });
+  throw new Error("L'envoi fonctionne dans l'application Onde.");
+}
+
 export async function appVersion(): Promise<string> {
   if (!inTauri) return "0.1.0";
   const { getVersion } = await import("@tauri-apps/api/app");
