@@ -22,6 +22,8 @@ export interface IntroSound {
 }
 
 const D2 = 73.42;
+/** Présence des cliquetis et grains par rapport à la nappe. */
+const GRAIN = 6;
 
 export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound {
   const now = (at?: number) => at ?? ctx.currentTime;
@@ -130,11 +132,102 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
       voice(D2 * 5.04, "sine", 0, -0.2),              // fa# aigu
     ];
     for (const o of voices) o.start(t);
+    if (!ambienceStarted) { ambienceStarted = true; ambience(t, 6.5); }
     bed.gain.setValueAtTime(0, t);
-    bed.gain.linearRampToValueAtTime(0.42, t + 1.1);
+    bed.gain.linearRampToValueAtTime(0.36, t + 1.1);
     bedLP.frequency.setValueAtTime(180, t);
     bedLP.frequency.exponentialRampToValueAtTime(520, t + 1.2);
   }
+
+  // ---- Petites briques : grain de bruit et tintement ----
+  /** Grain de bruit très court et filtré : clic, cliquetis, poussière. */
+  function grain(t: number, freq: number, peak: number, tau = 0.012, pan = 0, q = 2.5, send = 0.3): void {
+    const src = noiseSrc(t, tau * 8 + 0.02);
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = freq;
+    bp.Q.value = q;
+    const g = ctx.createGain();
+    pluck(g.gain, t, peak * GRAIN, 0.0015, tau);
+    src.connect(bp).connect(g);
+    out(g, send, pan);
+  }
+
+  /** Tintement sinusoïdal qui s'éteint doucement. */
+  function ping(t: number, f: number, peak: number, tau: number, pan = 0, send = 0.6): void {
+    const o = ctx.createOscillator();
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    pluck(g.gain, t, peak, 0.003, tau);
+    o.connect(g);
+    out(g, send, pan);
+    o.start(t);
+    o.stop(t + tau * 8);
+  }
+
+  /** Souffle large qui se déplace dans l'espace stéréo. */
+  function whoosh(t: number, dur: number, f0: number, f1: number, peak: number, pan0: number, pan1: number): void {
+    const src = noiseSrc(t, dur + 1);
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(f0, t);
+    bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(peak, t + dur * 0.7);
+    g.gain.setTargetAtTime(0, t + dur * 0.7, dur * 0.25);
+    const p = ctx.createStereoPanner();
+    p.pan.setValueAtTime(pan0, t);
+    p.pan.linearRampToValueAtTime(pan1, t + dur);
+    src.connect(bp).connect(g).connect(p);
+    out(p, 0.5);
+  }
+
+  /** Ambiance de fond : souffle de bande et air de salle, plus une poussière de grains aigus. */
+  function ambience(t: number, dur: number): void {
+    for (const pan of [-0.7, 0.7]) {
+      const src = noiseSrc(t, dur + 2);
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 1800;
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 120;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.055, t + 0.8);
+      g.gain.linearRampToValueAtTime(0.085, t + 3.6);
+      g.gain.linearRampToValueAtTime(0.0, t + dur);
+      const p = ctx.createStereoPanner();
+      p.pan.value = pan;
+      src.connect(hp).connect(lp).connect(g).connect(p);
+      out(p, 0.2);
+      // Souffle aigu de bande, plus fin
+      const hiss = noiseSrc(t, dur + 2);
+      const hh = ctx.createBiquadFilter();
+      hh.type = "highpass";
+      hh.frequency.value = 7000;
+      const gh = ctx.createGain();
+      gh.gain.setValueAtTime(0, t);
+      gh.gain.linearRampToValueAtTime(0.03, t + 1);
+      gh.gain.linearRampToValueAtTime(0.0, t + dur);
+      const ph = ctx.createStereoPanner();
+      ph.pan.value = -pan * 0.5;
+      hiss.connect(hh).connect(gh).connect(ph);
+      out(ph, 0);
+    }
+    // Poussière : grains aigus aléatoires, plus denses au milieu de l'animation
+    let x = t + 0.2;
+    while (x < t + dur - 0.6) {
+      const k = (x - t) / dur;
+      const density = 10 + 30 * Math.sin(Math.PI * Math.min(1, k * 1.15));
+      grain(x, 5000 + Math.random() * 7000, 0.04 + Math.random() * 0.06, 0.004 + Math.random() * 0.006, Math.random() * 1.6 - 0.8, 4, 0.5);
+      x += (0.4 + Math.random()) / density;
+    }
+  }
+
+  let ambienceStarted = false;
 
   const sound: IntroSound = {
     strokes(at) {
@@ -154,6 +247,8 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
         g.gain.setTargetAtTime(0, t + 0.12, 0.16);
         src.connect(bp).connect(g);
         out(g, 0.35, i % 2 ? 0.35 : -0.35);
+        // Grain du feutre sur le papier
+        for (let k = 0; k < 9; k++) grain(t + 0.02 + k * 0.045 + Math.random() * 0.02, 2500 + Math.random() * 3000, 0.09 * (1 - k / 10), 0.006, i % 2 ? 0.3 : -0.3, 3, 0.2);
       });
     },
 
@@ -180,11 +275,14 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
       out(gl, 0.15);
       low.start(t);
       low.stop(t + 1.2);
+      // Tintement métallique (partiels inharmoniques) et petit écho de clics
+      for (const [f, a, tau, pan] of [[1870, 0.11, 0.35, -0.2], [2870, 0.07, 0.25, 0.25], [4130, 0.05, 0.18, 0], [5960, 0.03, 0.12, 0.3]] as const) ping(t + 0.004, f, a, tau, pan, 0.7);
+      [0.11, 0.2, 0.27].forEach((d, i) => grain(t + d, 3200 - i * 400, 0.12 - i * 0.03, 0.008, i % 2 ? 0.5 : -0.5));
       // La nappe s'éclaire
       hold(bedLP.frequency, t);
       bedLP.frequency.exponentialRampToValueAtTime(950, t + 0.45);
       hold(bed.gain, t);
-      bed.gain.linearRampToValueAtTime(0.5, t + 0.6);
+      bed.gain.linearRampToValueAtTime(0.42, t + 0.6);
     },
 
     build(dur, at) {
@@ -193,9 +291,22 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
       hold(bedLP.frequency, t);
       bedLP.frequency.exponentialRampToValueAtTime(4200, t + dur);
       hold(bed.gain, t);
-      bed.gain.linearRampToValueAtTime(0.62, t + dur);
+      bed.gain.linearRampToValueAtTime(0.52, t + dur);
       shimmer?.gain.setValueAtTime(0, t);
       shimmer?.gain.linearRampToValueAtTime(0.16, t + dur);
+      // Un clic par graduation de la règle, au moment où elle apparaît (du centre vers les bords)
+      const STEM = 128.8;
+      for (let i = 0; i <= 20; i++) {
+        const x = i * 11;
+        const p = Math.min(0.995, Math.abs(x - STEM) / 128.8);
+        const tt = t + 0.15 + (-Math.log2(1 - p) / 10) * 0.8;
+        grain(tt, 3800 + (x / 220) * 2400, 0.16, 0.007, (x - 110) / 130, 3.5, 0.35);
+      }
+      // Pluie de micro-clics : les barres de la forme d'onde jaillissent depuis la tête de lecture
+      for (let i = 0; i < 100; i += 2) {
+        const x = 4 + i * 2.12;
+        grain(t + 0.45 + Math.abs(x - STEM) * 0.004 + Math.random() * 0.01, 1800 + Math.random() * 2600, 0.05 + Math.random() * 0.05, 0.005, (x - 110) / 120, 3, 0.3);
+      }
       // Souffle qui accompagne, fondu dans la nappe
       const src = noiseSrc(t, dur + 2);
       const bp = ctx.createBiquadFilter();
@@ -257,6 +368,15 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
       gn.gain.setTargetAtTime(0, t + dur * 0.8, 0.08);
       n.connect(bp).connect(gn);
       out(gn, 0.3);
+      // Cliquetis du compteur de bande : accélère puis ralentit
+      let c = t + 0.03;
+      while (c < t + dur - 0.05) {
+        const x = (c - t) / dur;
+        grain(c, 2600 + Math.sin(Math.PI * x) * 1800, 0.09, 0.005, Math.sin(x * 9) * 0.4, 4, 0.25);
+        c += 0.075 - 0.055 * Math.sin(Math.PI * x);
+      }
+      // Souffle qui aspire vers l'accord final
+      whoosh(t + 0.1, dur - 0.1, 300, 5000, 0.16, 0.6, 0);
       // Arrêt de la bande
       sound.clip(t + dur - 0.03);
     },
@@ -273,10 +393,16 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
       });
       shimmer?.gain.setTargetAtTime(0.06, t, 0.4);
       hold(bed.gain, t);
-      bed.gain.linearRampToValueAtTime(0.7, t + 0.35);
-      bed.gain.linearRampToValueAtTime(0.55, t + 0.9);
+      bed.gain.linearRampToValueAtTime(0.6, t + 0.35);
+      bed.gain.linearRampToValueAtTime(0.47, t + 0.9);
       bed.gain.exponentialRampToValueAtTime(0.0005, t + 5.5);
       for (const o of voices) o.stop(t + 7);
+      // La timeline part se ranger à gauche : souffle qui traverse vers la gauche
+      whoosh(t, 0.9, 2500, 500, 0.2, 0.3, -0.8);
+      // Petit arpège scintillant sur l'accord (ré, fa#, la, ré)
+      [D2 * 16, D2 * 16 * 1.26, D2 * 24, D2 * 32].forEach((f, i) => ping(t + 0.18 + i * 0.07, f, 0.05, 0.25, [-0.5, 0.5, -0.25, 0.3][i], 0.8));
+      // Dernières poussières qui retombent
+      for (let k = 0; k < 14; k++) grain(t + 0.3 + k * 0.09 + Math.random() * 0.05, 6000 + Math.random() * 5000, 0.06 * (1 - k / 16), 0.004, Math.random() * 1.4 - 0.7, 4, 0.6);
       // Cloche discrète au-dessus
       for (const [f, peak, pan] of [[D2 * 16, 0.13, -0.15], [D2 * 16 * 2.76, 0.03, 0.2], [D2 * 24, 0.05, 0.3]] as const) {
         const b = ctx.createOscillator();
