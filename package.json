@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "sons": "python3 scripts/generer-sons-test.py",
-    "premiere": "esbuild premiere/src/panel.ts --bundle --format=iife --target=es2019 --charset=utf8 --external:premierepro --external:uxp --external:fs --external:os --outfile=premiere/plugin/main.js"
+    "premiere": "node premiere/build.mjs"
   },
   "dependencies": {
     "@crabnebula/tauri-plugin-drag": "^2.1.0",

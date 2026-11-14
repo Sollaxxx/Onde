@@ -1,0 +1,63 @@
+/* Panneau Onde pour Premiere Pro. UXP ne gère pas CSS Grid : tout est en flexbox.
+   Les couleurs suivent le thème de Premiere ; le bleu et le rouge Onde servent d'accents. */
+:root {
+  --bg: var(--uxp-host-background-color, #232323);
+  --ink: var(--uxp-host-text-color, #e6e6e6);
+  --muted: var(--uxp-host-text-color-secondary, #9a9a9a);
+  --line: var(--uxp-host-border-color, #3a3a3a);
+  --blue: #7d96ff;
+  --blue-deep: #002fa7;
+  --red: #e2231a;
+  --sel: rgba(125, 150, 255, 0.14);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--ink); font-size: 12px; overflow: hidden; }
+.muted { color: var(--muted); }
+.mono { font-family: Consolas, Menlo, monospace; font-size: 10px; letter-spacing: 0.04em; }
+
+.top { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
+.brand { display: flex; align-items: center; }
+.brand b { font-size: 14px; margin-left: 8px; }
+.logo { position: relative; width: 16px; height: 16px; background: var(--blue-deep); }
+.logo i { position: absolute; left: 7px; top: 1px; width: 2px; height: 14px; background: var(--red); }
+.tag { margin-left: 8px; font-size: 9px; padding: 1px 4px; border: 1px solid var(--line); color: var(--muted); }
+
+.search { padding: 4px 12px 8px; }
+#q { width: 100%; height: 30px; padding: 0 10px; font-size: 13px; color: var(--ink); background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); border-radius: 0; }
+#q:focus { border-color: var(--blue); }
+
+.list { flex: 1; overflow-y: scroll; border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+.row:hover { background: rgba(255, 255, 255, 0.04); }
+.row.sel { background: var(--sel); }
+.row.ready { cursor: grab; }
+
+.play { flex: 0 0 26px; width: 26px; height: 26px; padding: 0; border: 1px solid var(--line); background: transparent; color: var(--ink); font-size: 10px; }
+.play.on { background: var(--blue); border-color: var(--blue); color: #0e0f12; }
+
+.info { flex: 1; min-width: 0; margin-left: 10px; display: flex; flex-direction: column; }
+.info b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.info span { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.wave { flex: 0 0 64px; height: 20px; margin-left: 8px; display: flex; align-items: center; }
+.wave i { flex: 1; margin-right: 1px; background: var(--muted); opacity: 0.55; }
+.row.sel .wave i { background: var(--blue); opacity: 1; }
+
+.dur { flex: 0 0 auto; margin-left: 8px; }
+
+.ins { flex: 0 0 auto; margin-left: 8px; height: 26px; padding: 0 10px; border: 0; background: var(--blue); color: #0e0f12; font-weight: 700; font-size: 11px; }
+.ins:disabled { opacity: 0.5; }
+
+.more { display: block; width: calc(100% - 24px); margin: 10px 12px; height: 30px; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+.empty { padding: 20px 12px; color: var(--muted); }
+
+.foot { padding: 7px 12px; border-top: 1px solid var(--line); min-height: 16px; }
+.foot.ok { color: #7fd29a; }
+.foot.err { color: #ff7a72; }
+
+.player { position: absolute; width: 1px; height: 1px; left: -10px; top: -10px; opacity: 0; }
+
+@media (max-width: 330px) {
+  .wave { display: none; }
+}
