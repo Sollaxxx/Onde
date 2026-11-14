@@ -43,14 +43,3 @@ Projet Pages → **Metrics → Web Analytics → Enable**.
 
 ### 5. (Plus tard) Nom de domaine
 Projet Pages → **Custom domains → Set up a custom domain**.
-
-## Voir les inscrits
-D1 → base `onde` → **Console** :
-
-```sql
-SELECT email, created_at FROM waitlist ORDER BY created_at DESC;
-```
-
-## Avant de partager le lien publiquement
-- ✅ Adresse de contact branchée : contact.ondesound@gmail.com
-- ✅ Lien Ko-fi branché : https://ko-fi.com/ondeapp

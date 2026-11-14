@@ -3,7 +3,7 @@
 
 Lit uniquement les pages publiques de résultats (titres anglais et français,
 description, sous-catégorie UCS, durée), sans rien télécharger d'audio.
-Accord de l'auteur : crédit « BigSoundBank - Joseph Sardin » + lien vers la page du son.
+Utilisé avec l'accord de l'auteur : crédit « BigSoundBank - Joseph Sardin » + lien vers la page du son.
 
 Usage : python3 scripts/import/bigsoundbank_catalogue.py --sortie catalogue_bsb.json
 """

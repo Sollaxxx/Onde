@@ -2,35 +2,33 @@
 
 **Gratuit, et ça s'entend.**
 
-Onde est une application de bureau gratuite et open-source : on cherche un bruitage ou une musique libre de droits, on l'écoute, puis on le glisse directement dans la timeline de son logiciel de montage (Premiere Pro, DaVinci Resolve, Final Cut, CapCut, Avid…).
+Onde est une application de bureau gratuite et open source pour les monteurs vidéo : on cherche un bruitage ou une musique libre de droits, on l'écoute, puis on le glisse directement dans la timeline de son logiciel de montage (Premiere Pro, DaVinci Resolve, CapCut, Avid…).
 
-> État : **prototype 0.1** (phase 2 du plan de route). La bibliothèque contient 16 sons de test générés ; le serveur de sons arrive en phase 5.
+> Onde est en **bêta**, sur Windows pour commencer. La version macOS viendra ensuite.
 
-## Ce que fait le prototype
+## Ce que fait Onde
 
-- Recherche instantanée, sans accents et avec synonymes français/anglais (« porte », « door », « boom »…).
-- Catégories UCS, favoris et récents.
-- Pré-écoute avec forme d'onde et tête de lecture.
-- **Glisser-déposer système** : attrapez une ligne, la forme d'onde ou le bouton bleu, et lâchez le son dans n'importe quel logiciel.
-- Chaque son utilisé est copié dans un dossier stable, `Documents\Onde\<CODE UCS>\`, pour que votre projet de montage ne le perde jamais.
-- Mode clair et mode sombre, et mode compact (petite fenêtre toujours au premier plan, pour un deuxième écran).
-- Module de mise à jour signé, prêt à activer (voir plus bas).
-- Raccourcis : `Ctrl K` chercher · `Espace` écouter · `↑ ↓` naviguer · `F` favori · `Échap` fermer.
+- Une **bibliothèque en ligne** de sons libres de droits, classés par catégories (UCS).
+- Une **recherche instantanée** en français et en anglais, sans souci des accents et avec synonymes (« porte », « door », « boom »…).
+- Une **pré-écoute immédiate** avec forme d'onde, sans attendre le téléchargement.
+- Le **glisser-déposer** vers n'importe quel logiciel : attrapez une ligne, la forme d'onde ou le bouton bleu, puis lâchez le son dans votre timeline.
+- Chaque son utilisé est copié dans un dossier stable, rangé par catégorie (par défaut `Documents\Onde`, modifiable dans les réglages), pour que votre projet de montage ne le perde jamais.
+- Un mode clair, un mode sombre et un mode compact (petite fenêtre toujours au premier plan, pratique sur un deuxième écran).
+- Les **mises à jour automatiques** : Onde vous propose lui-même chaque nouvelle version.
+- Des raccourcis : `Ctrl K` chercher · `Espace` écouter · `↑ ↓` naviguer · `F` favori · `Échap` fermer.
 
-## Lancer Onde sur Windows
+## Installer
 
-### Option A : sans rien installer
+Téléchargez `Onde_x.y.z_x64-setup.exe` sur la page [Releases](../../releases/latest), puis lancez-le.
 
-Sur GitHub, onglet **Actions**, ouvrez **Installateur Windows**, puis **Run workflow**. Une dizaine de minutes plus tard, l'installateur `.exe` est téléchargeable en bas de la page de l'exécution.
+Tant qu'Onde n'est pas signé par un certificat commercial, Windows peut afficher un avertissement SmartScreen. Pour continuer, cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
 
-### Option B : sur votre PC (pour développer)
+## Compiler depuis les sources
 
-Installez une seule fois :
+À installer une seule fois :
 1. **Node.js** (version LTS) : https://nodejs.org
 2. **Rust** : https://rustup.rs
-3. **Visual Studio Build Tools**, avec la charge de travail « Développement Desktop en C++ ».
-
-WebView2 est déjà présent sur Windows 10 et 11.
+3. Sous Windows, **Visual Studio Build Tools** avec la charge de travail « Développement Desktop en C++ ». Pour les autres systèmes, voir les [prérequis Tauri](https://tauri.app/start/prerequisites/).
 
 Puis, dans le dossier du projet :
 
@@ -42,67 +40,41 @@ npm install
 npm run tauri dev
 ```
 
-Pour fabriquer l'installateur (`src-tauri/target/release/bundle/nsis/`) :
-
-```bash
-npm run tauri build
-```
-
-Pour tester seulement l'interface dans un navigateur (sans glisser-déposer vers un logiciel) :
+Pour tester seulement l'interface dans un navigateur, sans glisser-déposer vers un logiciel :
 
 ```bash
 npm run dev
 ```
 
-## À tester en priorité (phase 2)
-
-Glissez un son depuis Onde vers chacun de ces logiciels et notez le résultat :
-
-| Logiciel | Vers la timeline | Vers le panneau média |
-| --- | --- | --- |
-| Premiere Pro | | |
-| DaVinci Resolve | | |
-| CapCut | | |
-| Avid Media Composer | | |
-
 ## Organisation du code
 
 ```
 onde/
-├── index.html, src/            Interface (TypeScript, sans framework)
-│   ├── main.ts                 Écran bibliothèque, lecture, glisser-déposer, raccourcis
-│   ├── api.ts                  Pont vers le cœur natif (et mode navigateur)
-│   ├── search.ts               Recherche et synonymes
-│   └── styles.css              Charte Onde (clair et sombre)
-├── src-tauri/                  Cœur natif (Rust, Tauri 2)
-│   ├── src/lib.rs              Catalogue, dossier Documents\Onde, chemins
-│   ├── tauri.conf.json         Fenêtre, sécurité, installateur, mises à jour
-│   ├── capabilities/           Permissions accordées à l'interface
-│   └── resources/samples/      Sons de test + catalog.json
-└── scripts/generer-sons-test.py  Regénère les sons de test (ffmpeg)
+├── index.html, src/        Interface (TypeScript, sans framework)
+│   ├── main.ts             Bibliothèque, écoute, glisser-déposer, réglages
+│   ├── api.ts              Pont vers le cœur natif
+│   ├── search.ts           Recherche, classement et synonymes
+│   └── styles.css          Charte graphique (clair et sombre)
+├── src-tauri/              Cœur natif (Rust, Tauri 2)
+│   ├── src/lib.rs          Catalogue, téléchargement des sons, dossier de bibliothèque
+│   ├── tauri.conf.json     Fenêtre, sécurité, installateur, mises à jour
+│   └── capabilities/       Permissions accordées à l'interface
+├── scripts/                Numéro de version, import des sons libres
+└── site/                   Site web
 ```
 
-## Publier une nouvelle version
+## Les sons
 
-Les applications installées vérifient au démarrage s'il existe une version plus récente, signée avec la clé d'Onde, et proposent « Installer et redémarrer ».
+Les sons proposés sont sous licence **CC0** (domaine public) : vous pouvez les utiliser librement, y compris dans des projets commerciaux.
 
-1. Changer le numéro de version :
-   ```bash
-   node scripts/version.mjs 0.3.0
-   ```
-2. Faire un commit et le fusionner dans `main`.
-3. Sur GitHub, onglet **Actions → Publier une version → Run workflow**.
+La bibliothèque actuelle doit beaucoup à **[BigSoundBank](https://bigsoundbank.com) – Joseph Sardin**, crédité sur chaque son avec un lien vers sa page d'origine.
 
-GitHub compile l'installateur, le signe, puis crée la version `v0.3.0` avec le fichier `latest.json` que lisent les applications.
+## Contribuer
 
-La clé privée de signature est rangée dans les secrets du dépôt (`TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). ⚠️ Elle ne doit **jamais** être dans le dépôt, et doit être sauvegardée à deux endroits : sans elle, les applications déjà installées ne peuvent plus être mises à jour.
-
-Pour fabriquer un installateur sur votre PC (`npm run tauri build`), les deux mêmes variables doivent être définies dans votre terminal. Pour développer (`npm run tauri dev`), elles ne sont pas nécessaires.
+Les retours, les bugs et les idées sont les bienvenus dans les [Issues](../../issues). Les contributions de code sont acceptées sous réserve de signer l'accord de contribution (CLA).
 
 ## Licence
 
-Le code est publié sous licence **GNU AGPL-3.0** (voir `LICENSE`). Les contributions sont acceptées sous réserve de signer l'accord de contribution (CLA).
+Le code est publié sous licence **GNU AGPL-3.0** (voir [`LICENSE`](LICENSE)).
 
 **Le nom « Onde » et le logo Onde ne sont pas couverts par la licence AGPL.** Une version modifiée de ce logiciel doit porter un autre nom et un autre logo.
-
-Les sons de test fournis dans `src-tauri/resources/samples` sont générés par synthèse et placés dans le domaine public (CC0).
