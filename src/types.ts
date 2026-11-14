@@ -9,6 +9,22 @@ export interface Sound {
   format: string;
   license: string;
   peaks: number[];
+  titleEn?: string;
+  description?: string;
+  descriptionEn?: string;
+  ucs?: string;
+  author?: string;
+  credit?: string;
+  source?: string;
+  sourceUrl?: string;
+  bytes?: number;
+}
+
+/** « en ligne » : bibliothèque Cloudflare ; « cache » : dernière copie hors ligne ; « test » : sons de test. */
+export interface Catalog {
+  origin: "en ligne" | "cache" | "test";
+  cdn: string;
+  sounds: Sound[];
 }
 
 export type Theme = "clair" | "sombre" | "systeme";

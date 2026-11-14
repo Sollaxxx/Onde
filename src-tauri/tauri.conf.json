@@ -24,16 +24,20 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$DOCUMENT/Onde/**"]
+        "scope": [
+          "$DOCUMENT/Onde/**"
+        ]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "category": "Video",
     "shortDescription": "Bruitages et musiques libres de droits pour monteurs",
     "copyright": "Onde — projet open-source (AGPL-3.0)",
@@ -44,17 +48,30 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["resources/samples/*", "resources/drag-icon.png"],
+    "resources": [
+      "resources/samples/*",
+      "resources/drag-icon.png"
+    ],
     "createUpdaterArtifacts": false,
     "windows": {
-      "nsis": { "languages": ["French", "English"], "displayLanguageSelector": false }
+      "nsis": {
+        "languages": [
+          "French",
+          "English"
+        ],
+        "displayLanguageSelector": false
+      }
     }
   },
   "plugins": {
     "updater": {
       "pubkey": "REMPLACER_PAR_LA_CLE_PUBLIQUE_ONDE",
-      "endpoints": ["https://github.com/sollaxxx/onde/releases/latest/download/latest.json"],
-      "windows": { "installMode": "passive" }
+      "endpoints": [
+        "https://github.com/sollaxxx/onde/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
