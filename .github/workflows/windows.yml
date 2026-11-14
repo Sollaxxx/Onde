@@ -1,9 +1,9 @@
-name: Installateur Windows
+name: Installateur Windows (test)
 
+# Fabrique un installateur à télécharger depuis la page de l'exécution,
+# sans publier de version. Pour publier : « Publier une version ».
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
 
 jobs:
   windows:
@@ -27,6 +27,9 @@ jobs:
 
       - name: Compiler l'installateur
         run: npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Publier l'installateur
         uses: actions/upload-artifact@v4
