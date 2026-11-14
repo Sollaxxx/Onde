@@ -52,5 +52,5 @@ SELECT email, created_at FROM waitlist ORDER BY created_at DESC;
 ```
 
 ## Avant de partager le lien publiquement
-- Remplacer `contact@onde.[domaine]` (page d'accueil, mentions légales, confidentialité) par la vraie adresse de contact.
-- Brancher le lien Ko-fi, ou retirer le bloc « Soutenir ».
+- ✅ Adresse de contact branchée : contact.ondesound@gmail.com
+- ✅ Lien Ko-fi branché : https://ko-fi.com/ondeapp
