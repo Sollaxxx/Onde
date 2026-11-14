@@ -599,7 +599,11 @@ root.addEventListener("click", async (e) => {
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
-    case "replay-accueil": await openAccueil(); return;
+    case "replay-accueil": {
+      if (!introWanted()) { await openAccueil(); return; }
+      await playIntro(openAccueil().then(nextFrame));
+      return;
+    }
     case "more": state.limit += 300; render(); return;
     case "source": {
       const s = byId(state.selId);
