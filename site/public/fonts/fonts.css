@@ -1,0 +1,11 @@
+/* Polices hébergées par le site (aucune requête vers un service tiers).
+   Funnel Display, Funnel Sans et Martian Mono : licence SIL Open Font License 1.1. */
+@font-face { font-family: "Funnel Display"; font-weight: 500; font-display: swap; src: url("funnel-display-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Funnel Display"; font-weight: 600; font-display: swap; src: url("funnel-display-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Funnel Display"; font-weight: 700; font-display: swap; src: url("funnel-display-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Funnel Display"; font-weight: 800; font-display: swap; src: url("funnel-display-latin-800-normal.woff2") format("woff2"); }
+@font-face { font-family: "Funnel Sans"; font-weight: 400; font-display: swap; src: url("funnel-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Funnel Sans"; font-weight: 500; font-display: swap; src: url("funnel-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Funnel Sans"; font-weight: 600; font-display: swap; src: url("funnel-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Martian Mono"; font-weight: 400; font-display: swap; src: url("martian-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Martian Mono"; font-weight: 500; font-display: swap; src: url("martian-mono-latin-500-normal.woff2") format("woff2"); }
