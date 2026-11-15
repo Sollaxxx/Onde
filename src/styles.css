@@ -325,3 +325,7 @@ button { cursor: pointer; }
 .outro { position: fixed; inset: 0; z-index: 100; background: #002fa7; pointer-events: all; }
 .outro-ph { position: fixed; top: 0; bottom: 0; left: 0; width: 3px; margin-left: -1.5px; z-index: 101; background: #e2231a; pointer-events: none; }
 .outro-ph i { position: absolute; top: 0; left: -8px; width: 19px; height: 16px; background: #e2231a; clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%); }
+
+/* Bouton compact à la place d'un badge (installer un panneau) */
+.badge-btn { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.04em; padding: 6px 10px; border: 0; background: var(--blue); color: var(--blue-ink); white-space: nowrap; text-transform: uppercase; }
+.badge-btn:disabled { opacity: 0.6; }

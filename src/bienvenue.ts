@@ -49,7 +49,7 @@ function panel(step: number, word: string): string {
   </aside>`;
 }
 
-function stepBody(a: Accueil, theme: Theme): string {
+function stepBody(a: Accueil, theme: Theme, premiere: string): string {
   switch (a.step) {
     case 0: {
       const mode = (v: Theme, label: string) => `<button class="ob-mode ${v}" role="radio" aria-checked="${theme === v}" data-act="ob-theme" data-value="${v}">
@@ -76,16 +76,16 @@ function stepBody(a: Accueil, theme: Theme): string {
         <p class="ob-note">Rien n'est téléchargé d'avance : un son arrive sur votre disque seulement quand vous l'utilisez. Vous pourrez changer de dossier dans les Réglages.</p>`;
     case 2: {
       const apps: [string, string, string][] = [
-        ["Pr", "Premiere Pro", "Glissez vers la timeline ou le panneau Projet"],
+        ["Pr", "Premiere Pro", "Glissez depuis Onde, ou installez le panneau Onde dans Premiere"],
         ["Dr", "DaVinci Resolve", "Glissez vers la timeline ou le Media Pool"],
         ["Cc", "CapCut", "Glissez vers le panneau Média ou la piste audio"],
         ["Av", "Avid Media Composer", "Glissez vers un chutier"],
       ];
       return `<h1>Ça marche avec vos logiciels.</h1>
-        <p class="lead">Rien à installer : attrapez un son dans Onde et lâchez-le dans votre logiciel de montage. C'est tout.</p>
+        <p class="lead">Attrapez un son dans Onde et lâchez-le dans votre logiciel de montage. Pour Premiere, le panneau Onde s'installe aussi directement dans le logiciel.</p>
         <div class="ob-apps">${apps.map(([ini, name, info]) => `<div class="ob-app"><span class="ini" aria-hidden="true">${ini}</span>
-          <span><b>${name}</b><span class="sub">${info}</span></span><span class="badge on">PRÊT</span></div>`).join("")}</div>
-        <p class="ob-note">Des panneaux Onde intégrés à Premiere et DaVinci arrivent bientôt : ils apparaîtront dans le bouton Intégrations.</p>`;
+          <span><b>${name}</b><span class="sub">${info}</span></span>${ini === "Pr" ? premiere : `<span class="badge on">PRÊT</span>`}</div>`).join("")}</div>
+        <p class="ob-note">Le panneau Premiere fonctionne avec Premiere Pro 2019 et plus. Vous pourrez l'installer plus tard depuis le bouton Intégrations. DaVinci Resolve arrive bientôt.</p>`;
     }
     default:
       return `<h1>C'est prêt.</h1>
@@ -100,7 +100,7 @@ function stepBody(a: Accueil, theme: Theme): string {
   }
 }
 
-export function accueilScreen(a: Accueil, theme: Theme, word: string, winButtons: string): string {
+export function accueilScreen(a: Accueil, theme: Theme, word: string, winButtons: string, premiere = ""): string {
   const last = a.step === STEPS.length - 1;
   const next = a.step === 0 ? "Commencer" : last ? "Ouvrir la bibliothèque" : "Continuer";
   return `<div class="ob">
@@ -109,7 +109,7 @@ export function accueilScreen(a: Accueil, theme: Theme, word: string, winButtons
     <main class="ob-main">
       <div class="ob-content">
         <p class="eyebrow">Étape ${a.step + 1} sur ${STEPS.length}</p>
-        ${stepBody(a, theme)}
+        ${stepBody(a, theme, premiere)}
       </div>
       <footer class="ob-foot">
         ${a.step === 0 ? `<button class="ob-skip" data-act="ob-skip">Passer la configuration</button>` : `<button class="ob-back" data-act="ob-back">${BACK}Retour</button>`}

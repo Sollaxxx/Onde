@@ -51,10 +51,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "resources/samples/*",
-      "resources/drag-icon.png"
-    ],
+    "resources": {
+      "resources/samples/": "resources/samples/",
+      "resources/drag-icon.png": "resources/drag-icon.png",
+      "../premiere/cep/": "premiere-cep/"
+    },
     "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
