@@ -48,7 +48,11 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
   limiter.release.value = 0.15;
   const master = ctx.createGain();
   master.gain.value = volume;
-  glue.connect(limiter).connect(master).connect(ctx.destination);
+  // « drive » : gain avant le limiteur (1 par défaut ; poussé pour l'animation de lancement)
+  const drive = ctx.createGain();
+  // « soft » : écrêtage doux en sortie (transparent par défaut ; arrondit les crêtes quand on pousse le niveau)
+  const soft = ctx.createWaveShaper();
+  glue.connect(drive).connect(limiter).connect(master).connect(soft).connect(ctx.destination);
 
   const reverb = ctx.createConvolver();
   reverb.buffer = impulse(ctx, 3.2, 2.4);
@@ -425,6 +429,11 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
     launch(at) {
       const t = now(at);
       const T = t + 0.8; // la tête de lecture tombe dans le « d »
+      // Plus fort : on pousse le niveau dans le limiteur (le son devient plus dense sans saturer)
+      drive.gain.value = 2.6;
+      limiter.threshold.value = -4;
+      master.gain.value = 1.15;
+      { const n = 2048, c = new Float32Array(n), k = 1.6; for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = (Math.tanh(k * x) / Math.tanh(k)) * 0.93; } soft.curve = c; soft.oversample = "4x"; }
 
       // Grande salle : réverbération longue pour que l'impact résonne
       const hall = ctx.createConvolver();
