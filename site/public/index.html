@@ -214,6 +214,7 @@ footer a:hover{color:var(--ink)}
 .dl .btn-xl{min-height:64px;padding:0 28px;font-size:18px}
 .dl-meta{font:500 12px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--muted)}
 .ss{border:1px solid var(--line);background:var(--surface);padding:20px;display:grid;gap:14px;scroll-margin-top:100px;transition:border-color .5s var(--ease),box-shadow .5s var(--ease)}
+.ss[hidden]{display:none}
 .ss.flash{border-color:var(--blue);box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 18%,transparent)}
 .ss h3{margin:0;font:700 20px/1.2 var(--f-display);letter-spacing:-.01em}
 .ss p{margin:0;color:var(--ink-2)}
@@ -228,6 +229,18 @@ footer a:hover{color:var(--ink)}
 .win .bt{margin-top:auto;display:flex;justify-content:flex-end;gap:6px}
 .win .bt span{border:1px solid rgba(255,255,255,.75);padding:5px 12px}
 .win .hl{outline:3px solid var(--red);outline-offset:2px}
+.dl-btns{display:flex;flex-wrap:wrap;gap:10px}
+.dl-btns .btn{flex:1 1 200px}
+.mac{background:#ececec;color:#1d1d1f;padding:16px;font:400 12px/1.35 -apple-system,"SF Pro Text",system-ui,sans-serif;min-height:150px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;border-radius:12px;user-select:none}
+.mac .ic{width:34px;height:34px;background:#002FA7}
+.mac .t{font-size:14px;font-weight:700}
+.mac .bt{margin-top:auto;display:flex;flex-direction:column;gap:6px;align-self:stretch}
+.mac .bt span{background:#fff;border-radius:6px;padding:5px 12px}
+.mac .bt .hl{background:#0a7aff;color:#fff}
+.mac.set{align-items:flex-start;text-align:left;border-radius:10px}
+.mac.set .t{font-size:15px}
+.mac.set .bt{align-self:flex-end}
+.mac .hl{outline:3px solid var(--red);outline-offset:2px}
 /* Liste d'attente */
 .final{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px 56px;align-items:end}
 @media (max-width:860px){.final{grid-template-columns:minmax(0,1fr)}}
@@ -272,7 +285,7 @@ footer a:hover{color:var(--ink)}
       <button class="icon-btn" id="themeBtn" type="button" aria-label="Changer de mode clair ou sombre">
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v18H3V3z" fill="currentColor"/></svg>
       </button>
-      <a class="btn btn-primary btn-sm js-dl" href="/telecharger"><span>Télécharger</span></a>
+      <a class="btn btn-primary btn-sm js-dl" data-os="win" href="/telecharger"><span>Télécharger</span></a>
     </div>
   </div>
 </header>
@@ -280,14 +293,14 @@ footer a:hover{color:var(--ink)}
 <main id="top">
   <div class="wrap">
     <section class="hero" aria-labelledby="h1">
-      <p class="eyebrow" style="animation:focusIn 1s var(--ease) both">Bruitages et musiques libres de droits · Windows</p>
+      <p class="eyebrow" style="animation:focusIn 1s var(--ease) both">Bruitages et musiques libres de droits · Windows et Mac</p>
       <h1 id="h1"><span class="hw" style="--i:0">Gratuit,</span> <span class="hw" style="--i:1">et</span> <span class="hw" style="--i:2">ça</span> <span class="hw" style="--i:3">s'entend.</span></h1>
       <div class="hero-row">
         <p class="lede">Cherchez un son, écoutez-le, glissez-le dans votre timeline. Onde fonctionne avec Premiere Pro, DaVinci Resolve, Final Cut, CapCut et tous les logiciels qui acceptent un fichier glissé.</p>
         <div class="cta">
-          <a class="btn btn-primary js-dl" href="/telecharger"><span>Télécharger pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
+          <a class="btn btn-primary js-dl" data-os="win" href="/telecharger"><span>Télécharger pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
           <a class="btn btn-ghost" href="#demo"><span>Essayer la démo</span></a>
-          <p class="cta-note mono">Gratuit · Sans compte · Windows 10 et 11 · <span class="js-ver">Bêta</span> · macOS bientôt</p>
+          <p class="cta-note mono">Gratuit · Sans compte · <span class="js-ver">Bêta</span> · <a class="js-other" href="/telecharger/mac" data-win="Aussi pour Windows" data-mac="Aussi pour Mac">Aussi pour Mac</a></p>
         </div>
       </div>
 
@@ -347,7 +360,7 @@ footer a:hover{color:var(--ink)}
       <div class="free-side">
         <h2 class="line" id="h-free">Gratuit pour toujours, pour l'essentiel.</h2>
         <ul class="pills">
-          <li>App Windows</li>
+          <li>App Windows et Mac</li>
           <li>Toute la bibliothèque de base</li>
           <li>Usage commercial · CC0</li>
           <li>Open-source</li>
@@ -359,7 +372,7 @@ footer a:hover{color:var(--ink)}
   <section class="block wrap" aria-label="Questions fréquentes">
     <div class="faq reveal">
       <details><summary>Puis-je utiliser les sons dans un projet commercial ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Oui. Les sons de la bibliothèque de base sont sous licence CC0 : YouTube, publicité, film, client, sans créditer.</p></details>
-      <details><summary>Et sur Mac ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Windows d'abord. La version macOS suit, avec la même application.</p></details>
+      <details><summary>Et sur Mac ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Oui, depuis la version 0.3.0 : une seule application pour les Mac Intel et Apple Silicon, macOS 11 ou plus récent. Au premier lancement, macOS demande une confirmation, car Onde n'est pas encore signé par Apple : ouvrez Réglages Système → Confidentialité et sécurité, puis cliquez sur « Ouvrir quand même ».</p></details>
       <details><summary>Comment proposer mes propres sons ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Bientôt, directement depuis l'application. Chaque son sera vérifié avant publication. Et à terme, une partie des revenus d'Onde sera reversée aux créateurs, selon l'utilisation réelle de leurs sons.</p></details>
       <details><summary>Windows affiche « Windows a protégé votre ordinateur » : est-ce normal ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Oui. Windows affiche ce message pour les logiciels qui ne sont pas encore signés par un certificat payant. Cliquez sur « Informations complémentaires », puis sur « Exécuter quand même ». Le code d'Onde est public et chaque mise à jour est signée.</p></details>
     </div>
@@ -390,11 +403,14 @@ footer a:hover{color:var(--ink)}
 
   <section class="wrap final" id="telecharger" aria-labelledby="h-final">
     <div class="beta-text">
-      <p class="eyebrow">Bêta Windows · gratuite</p>
+      <p class="eyebrow">Bêta Windows et Mac · gratuite</p>
       <h2 id="h-final">Votre prochain bruitage est à un glisser de là.</h2>
       <div class="dl">
-        <a class="btn btn-primary btn-xl js-dl" href="/telecharger"><span>Télécharger Onde pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
-        <p class="dl-meta"><span class="js-ver">Bêta</span> · Windows 10 et 11 (64 bits) · Gratuit, sans compte · <a href="https://github.com/Sollaxxx/Onde/releases" rel="noopener">Toutes les versions</a></p>
+        <div class="dl-btns">
+          <a class="btn btn-primary btn-xl js-dl" data-os="win" href="/telecharger"><span>Pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
+          <a class="btn btn-primary btn-xl js-dl" data-os="mac" href="/telecharger/mac"><span>Pour Mac</span><span class="arr" aria-hidden="true">↓</span></a>
+        </div>
+        <p class="dl-meta"><span class="js-ver">Bêta</span> · Windows 10 et 11 (64 bits) · macOS 11 et plus (Intel et Apple Silicon) · Gratuit, sans compte · <a href="https://github.com/Sollaxxx/Onde/releases" rel="noopener">Toutes les versions</a></p>
       </div>
     </div>
     <div class="ss" id="smartscreen" aria-labelledby="h-ss">
@@ -407,8 +423,18 @@ footer a:hover{color:var(--ink)}
           <div class="win" aria-hidden="true"><span class="t">Windows a protégé votre ordinateur</span><span>Application : Onde_x64-setup.exe<br>Éditeur : Éditeur inconnu</span><span class="bt"><span class="hl">Exécuter quand même</span><span>Ne pas exécuter</span></span></div></div>
       </div>
     </div>
+    <div class="ss" id="gatekeeper" aria-labelledby="h-gk" hidden>
+      <h3 id="h-gk">Sur Mac, macOS demande une confirmation la première fois</h3>
+      <p>Ouvrez le fichier .dmg et glissez Onde dans Applications. Onde n'est pas encore signé par Apple : au premier lancement, macOS le bloque. À faire une seule fois :</p>
+      <div class="ss-steps">
+        <div class="ss-step"><b><span>01</span>Cliquez sur « Terminé »</b>
+          <div class="mac" aria-hidden="true"><span class="ic"></span><span class="t">« Onde » n'a pas été ouvert</span><span>Apple n'a pas pu confirmer que « Onde » ne contenait pas de logiciel malveillant.</span><span class="bt"><span class="hl">Terminé</span><span>Placer dans la corbeille</span></span></div></div>
+        <div class="ss-step"><b><span>02</span>Réglages Système → Confidentialité et sécurité → « Ouvrir quand même »</b>
+          <div class="mac set" aria-hidden="true"><span class="t">Confidentialité et sécurité</span><span>Sécurité</span><span>L'ouverture de « Onde » a été bloquée pour protéger votre Mac.</span><span class="bt"><span class="hl">Ouvrir quand même</span></span></div></div>
+      </div>
+    </div>
     <form class="waitlist" id="waitlist" novalidate>
-      <label for="wl-email">Être prévenu du lancement public et de la version macOS</label>
+      <label for="wl-email">Être prévenu du lancement public</label>
       <div class="wl-row">
         <input id="wl-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" required>
         <button class="btn btn-primary" type="submit"><span id="wl-btn">Me prévenir</span><span class="arr" aria-hidden="true">→</span></button>
@@ -697,9 +723,28 @@ footer a:hover{color:var(--ink)}
     if(!d || !d.version) return;
     document.querySelectorAll('.js-ver').forEach(function(el){ el.textContent = 'Bêta ' + d.version; });
   }).catch(function(){});
-  var ss = document.getElementById('smartscreen');
-  document.querySelectorAll('.js-dl').forEach(function(a){
+  // Mac détecté : le bouton principal propose la version Mac (et le lien secondaire, Windows)
+  var isMac = /Macintosh|Mac OS X/.test(navigator.userAgent) && !/iPhone|iPad/.test(navigator.userAgent);
+  if(isMac){
+    document.querySelectorAll('.js-dl[data-os="win"]').forEach(function(a){
+      if(a.closest('.dl-btns')) return;
+      a.dataset.os = 'mac'; a.href = '/telecharger/mac';
+      var s = a.querySelector('span'); if(s) s.textContent = s.textContent.replace('Windows', 'Mac');
+    });
+    document.querySelectorAll('.js-other').forEach(function(a){ a.href = '/telecharger'; a.textContent = a.dataset.win; });
+    var b = document.querySelector('.dl-btns'); if(b) b.insertBefore(b.lastElementChild, b.firstElementChild);
+  }
+  // Une seule aide à la fois : celle du système détecté, puis celle du bouton cliqué
+  function showHelp(mac){
+    var g = document.getElementById('gatekeeper'), w = document.getElementById('smartscreen');
+    if(g) g.hidden = !mac; if(w) w.hidden = mac;
+  }
+  showHelp(isMac);
+  document.querySelectorAll('.js-dl, .js-other').forEach(function(a){
     a.addEventListener('click', function(){
+      var mac = /mac$/.test(a.getAttribute('href'));
+      showHelp(mac);
+      var ss = document.getElementById(mac ? 'gatekeeper' : 'smartscreen');
       if(!ss) return;
       setTimeout(function(){
         ss.scrollIntoView({ behavior: 'smooth', block: 'center' });
