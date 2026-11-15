@@ -2,7 +2,8 @@ import "./styles.css";
 import { notesHtml } from "./nouveautes";
 import * as api from "./api";
 import { formatDuration, normalize, search } from "./search";
-import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
+import type { Catalog, Playlist, Sound, Theme, UpdateInfo, View } from "./types";
+import { PERSO_CATEGORY, toSound } from "./perso";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 import { introWanted, playIntro } from "./intro";
 import { playOutro } from "./outro";
@@ -24,6 +25,15 @@ const state = {
   query: "",
   category: null as string | null,
   view: "tout" as View,
+  // Sons personnels (dossiers ajoutés dans les Réglages) et playlists
+  perso: [] as Sound[],
+  userDirs: [] as string[],
+  analyzing: 0, // sons personnels restant à analyser
+  playlists: store.get<Playlist[]>("onde.playlists", []),
+  playlistId: null as string | null,
+  catsOpen: store.get<boolean>("onde.categoriesOuvertes", false),
+  plMenu: false, // menu « Ajouter à une playlist » du son sélectionné
+  plDelete: false, // confirmation de suppression de la playlist affichée
   selId: null as string | null,
   playingId: null as string | null,
   theme: store.get<Theme>("onde.theme", "clair"),
@@ -61,7 +71,23 @@ if (api.isMac && api.inTauri) document.body.classList.add("mac");
 
 // ---------- Petites aides ----------
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-const byId = (id: string | null) => state.catalog.find((s) => s.id === id) ?? null;
+// Index de tous les sons (banque + sons personnels), reconstruit quand l'une des deux listes change
+let indexed: [Sound[], Sound[]] = [[], []];
+let everything: Sound[] = [];
+const index = new Map<string, Sound>();
+function allSounds(): Sound[] {
+  if (indexed[0] !== state.catalog || indexed[1] !== state.perso) {
+    indexed = [state.catalog, state.perso];
+    everything = [...state.catalog, ...state.perso];
+    index.clear();
+    for (const x of everything) index.set(x.id, x);
+  }
+  return everything;
+}
+const byId = (id: string | null) => (id ? (allSounds(), index.get(id) ?? null) : null);
+const isLocal = (s: Sound) => !!s.local || state.local.has(s.id);
+const playlistOf = (id: string | null) => state.playlists.find((p) => p.id === id) ?? null;
+function savePlaylists(): void { store.set("onde.playlists", state.playlists); }
 
 function waveSvg(peaks: number[], bars: number, cls = ""): string {
   const step = peaks.length / bars;
@@ -88,6 +114,7 @@ const ICON = {
   moon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6z"/></svg>`,
   shrink: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10h6V4M20 14h-6v6M10 10L3 3M14 14l7 7"/></svg>`,
   expand: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>`,
+  list: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="5" width="13" height="2.2"/><rect x="3" y="10.9" width="13" height="2.2"/><rect x="3" y="16.8" width="9" height="2.2"/><rect x="18" y="13" width="2.2" height="8"/><rect x="14.5" y="13" width="5.7" height="2.2"/></svg>`,
   chat: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h16v12H9l-5 4z"/></svg>`,
   logo: `<svg width="20" height="20" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#002FA7"/><rect x="12" y="34" width="96" height="58" fill="#FFFFFF"/><g fill="#002FA7"><rect x="22" y="50" width="12" height="26"/><rect x="40" y="42" width="12" height="42"/><rect x="76" y="46" width="12" height="34"/></g><polygon points="50,4 78,4 78,20 64,32 50,20" fill="#E2231A"/><rect x="58" y="26" width="12" height="84" fill="#E2231A"/></svg>`,
   word: `<svg width="52" height="20" viewBox="0 0 256 100" role="img" aria-label="Onde"><g fill="none" stroke="currentColor" stroke-width="13"><circle cx="28" cy="52" r="21.5"/><path d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/><circle cx="160" cy="52" r="21.5"/><path d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/><path d="M204.5 52H254"/></g><polygon points="169,0 194,0 194,10 181.5,20 169,10" fill="#E2231A"/><rect x="175" y="14" width="13" height="66" fill="#E2231A"/></svg>`,
@@ -105,11 +132,14 @@ function toast(msg: string): void {
 
 // ---------- Filtrage ----------
 function visibleSounds(): Sound[] {
-  let list = state.catalog;
+  let list = allSounds();
+  const ids = (l: string[]) => l.map((id) => byId(id)).filter((s): s is Sound => !!s);
   if (state.view === "favoris") list = list.filter((s) => state.favs.has(s.id));
-  if (state.view === "recents") list = state.recents.map((id) => byId(id)).filter((s): s is Sound => !!s);
+  if (state.view === "recents") list = ids(state.recents);
+  if (state.view === "perso") list = state.perso;
+  if (state.view === "playlist") list = ids(playlistOf(state.playlistId)?.ids ?? []);
   if (state.category) list = list.filter((s) => s.category === state.category);
-  if (state.offline && state.onlyLocal) list = list.filter((s) => state.local.has(s.id));
+  if (state.offline && state.onlyLocal) list = list.filter(isLocal);
   return search(list, state.query);
 }
 
@@ -159,6 +189,11 @@ function render(): void {
     const el = document.getElementById(focused) as HTMLInputElement | HTMLTextAreaElement | null;
     el?.focus();
     if (el) el.setSelectionRange(el.value.length, el.value.length);
+  }
+  if (focused === "pl-name") {
+    const el = document.getElementById("pl-name") as HTMLInputElement | null;
+    el?.focus();
+    el?.setSelectionRange(el.value.length, el.value.length);
   }
   if (focused === "q") {
     const q = document.getElementById("q") as HTMLInputElement;
@@ -222,6 +257,15 @@ function settingsScreen(): string {
           <div class="btns">
             <button class="secondary" data-act="open-folder">Ouvrir</button>
             <button class="secondary strong" data-act="choose-folder">Changer…</button>
+          </div>
+        </div>
+        <div class="set-row set-dirs">
+          <div><b>Mes sons</b><span>Ajoutez vos propres dossiers de sons : ils apparaissent dans « Mes sons », dans la recherche et dans vos playlists, à côté de la banque. Les fichiers restent où ils sont : Onde ne les copie, ne les déplace et ne les efface jamais.</span>
+            ${state.userDirs.length ? `<ul class="dirs">${state.userDirs.map((d) => `<li><span class="mono path">${esc(d)}</span><button class="link-btn" data-act="dir-remove" data-dir="${esc(d)}">Retirer</button></li>`).join("")}</ul>` : ""}
+          </div>
+          <div class="btns">
+            ${state.userDirs.length ? `<button class="secondary" data-act="dir-rescan">Actualiser</button>` : ""}
+            <button class="secondary strong" data-act="dir-add">Ajouter un dossier…</button>
           </div>
         </div>
         <div class="set-row">
@@ -465,8 +509,8 @@ function updateBanner(u: UpdateInfo): string {
 
 function sidebar(): string {
   const views: [View, string, number][] = [
-    ["tout", "Bibliothèque", state.catalog.length],
-    ["favoris", "Favoris", state.favs.size],
+    ["tout", "Bibliothèque", state.catalog.length + state.perso.length],
+    ["perso", "Mes sons", state.perso.length],
     ["recents", "Récents", state.recents.length],
   ];
   const cats = new Map<string, { code: string; n: number }>();
@@ -475,21 +519,36 @@ function sidebar(): string {
     c.n++;
     cats.set(s.category, c);
   }
+  const cur = (v: View) => state.screen === "biblio" && state.view === v && !state.category;
   return `<nav class="side" aria-label="Navigation">
-    <div class="nav">${views.map(([v, label, n]) => `<button data-view="${v}" aria-current="${state.screen === "biblio" && state.view === v && !state.category}"><span>${label}</span><span class="mono">${n}</span></button>`).join("")}
+    <div class="nav">${views.map(([v, label, n]) => `<button data-view="${v}" aria-current="${cur(v)}"><span>${label}</span><span class="mono">${v === "perso" && state.analyzing ? "…" : n}</span></button>`).join("")}
       ${state.contribOpen ? `<button data-act="contrib" aria-current="${state.screen === "contrib"}"><span>Mes contributions</span><span class="mono">+</span></button>` : ""}</div>
-    <div class="nav"><p class="eyebrow">Catégories UCS</p>
-      ${[...cats].sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([cat, { code }]) => `<button data-cat="${esc(cat)}" aria-current="${state.category === cat}"><span>${esc(cat)}</span><span class="mono">${code}</span></button>`).join("")}
+    <div class="nav">
+      <button class="nav-fold" data-act="cats-toggle" aria-expanded="${state.catsOpen}"><span class="eyebrow">Catégories UCS · ${cats.size}</span><span class="fold" aria-hidden="true">${state.catsOpen ? "−" : "+"}</span></button>
+      ${state.catsOpen ? [...cats].sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([cat, { code }]) => `<button data-cat="${esc(cat)}" aria-current="${state.category === cat}"><span>${esc(cat)}</span><span class="mono">${code}</span></button>`).join("") : ""}
     </div>
-    <div class="folder"><span class="eyebrow">Bibliothèque · ${state.origin === "en ligne" ? "en ligne" : state.origin === "cache" ? "hors ligne" : "sons de test"}</span><span class="path" style="margin-bottom:8px">${state.catalog.length} sons</span><span class="eyebrow">Dossier local</span><span class="path">${esc(state.libDir)}</span><button class="link-btn" data-act="open-folder">Ouvrir le dossier</button></div>
+    <div class="nav"><p class="eyebrow">Favoris</p>
+      <button data-view="favoris" aria-current="${cur("favoris")}"><span>${ICON.starOn}Titres likés</span><span class="mono">${state.favs.size}</span></button>
+      ${state.playlists.map((p) => `<button data-act="pl-open" data-pl="${p.id}" aria-current="${state.screen === "biblio" && state.view === "playlist" && state.playlistId === p.id}"><span>${ICON.list}${esc(p.name)}</span><span class="mono">${p.ids.length}</span></button>`).join("")}
+      <button class="nav-add" data-act="pl-new"><span>+ Nouvelle playlist</span></button>
+    </div>
+    <div class="folder"><span class="eyebrow">Bibliothèque · ${state.origin === "en ligne" ? "en ligne" : state.origin === "cache" ? "hors ligne" : "sons de test"}</span><span class="path" style="margin-bottom:8px">${state.catalog.length} sons${state.perso.length ? ` + ${state.perso.length} à vous` : ""}</span><span class="eyebrow">Dossier local</span><span class="path">${esc(state.libDir)}</span><button class="link-btn" data-act="open-folder">Ouvrir le dossier</button></div>
   </nav>`;
 }
 
 function mainList(list: Sound[]): string {
   const counts = new Map<string, number>();
-  for (const s of state.catalog) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
-  const filters = [null, ...[...counts].sort((a, b) => b[1] - a[1]).map(([c]) => c)].slice(0, 8);
+  for (const s of allSounds()) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+  const cats = [...counts].sort((a, b) => (a[0] === PERSO_CATEGORY ? -1 : b[0] === PERSO_CATEGORY ? 1 : a[0].localeCompare(b[0], "fr")));
+  const pl = state.view === "playlist" ? playlistOf(state.playlistId) : null;
   return `<main class="main">
+    ${pl ? `<div class="pl-head">
+      <label class="sr" for="pl-name">Nom de la playlist</label>
+      <input id="pl-name" class="pl-name" value="${esc(pl.name)}" maxlength="60" spellcheck="false" />
+      ${state.plDelete
+        ? `<span class="pl-confirm">Supprimer « ${esc(pl.name)} » ? Les sons ne sont pas effacés. <button class="secondary" data-act="pl-delete-no">Annuler</button><button class="secondary danger" data-act="pl-delete-yes">Supprimer</button></span>`
+        : `<button class="secondary" data-act="pl-delete">Supprimer la playlist</button>`}
+    </div>` : ""}
     <div class="searchbar">${ICON.search}
       <label for="q" class="sr">Rechercher un son</label>
       <input id="q" type="search" value="${esc(state.query)}" placeholder="Décrivez un son : « porte qui grince », « whoosh »…" autocomplete="off" spellcheck="false" />
@@ -498,7 +557,13 @@ function mainList(list: Sound[]): string {
     ${state.offline ? `<div class="offline-bar" role="status"><span><b>Hors ligne</b> · ${state.local.size} son${state.local.size > 1 ? "s" : ""} disponible${state.local.size > 1 ? "s" : ""} sur cet ordinateur</span>
       <button class="link-btn" data-act="offline-toggle">${state.onlyLocal ? "Afficher toute la bibliothèque" : "Seulement les sons disponibles"}</button></div>` : ""}
     <div class="chips">
-      ${filters.map((c) => `<button class="chip" data-cat="${c ?? ""}" aria-pressed="${state.category === c}">${c ? esc(c) : "Tout"}</button>`).join("")}
+      <label class="cat-select"><span class="sr">Catégorie</span>
+        <select id="cat-select">
+          <option value="">Toutes les catégories</option>
+          ${cats.map(([c, n]) => `<option value="${esc(c)}" ${state.category === c ? "selected" : ""}>${esc(c)} (${n})</option>`).join("")}
+        </select>
+      </label>
+      ${state.category ? `<button class="chip" data-cat="" aria-pressed="false">Effacer le filtre ✕</button>` : ""}
       <span class="count mono">${list.length} ${list.length > 1 ? "SONS" : "SON"}</span>
     </div>
     <div class="list" role="listbox" aria-label="Résultats">
@@ -511,7 +576,10 @@ function mainList(list: Sound[]): string {
 function emptyText(): string {
   if (state.offline && state.onlyLocal && !state.local.size) return "Hors ligne, et aucun son n'est encore sur cet ordinateur. Les sons que vous écoutez en ligne restent ensuite disponibles hors ligne.";
   if (state.offline && state.onlyLocal && !state.query) return "Aucun son disponible hors ligne dans cette sélection.";
-  if (state.view === "favoris" && !state.favs.size) return "Aucun favori pour l'instant. Touchez l'étoile d'un son, ou la touche F.";
+  if (state.view === "favoris" && !state.favs.size) return "Aucun titre liké pour l'instant. Touchez l'étoile d'un son, ou la touche F.";
+  if (state.view === "perso" && !state.userDirs.length) return "Ajoutez vos propres dossiers de sons dans Réglages → Mes sons : ils apparaîtront ici et dans la recherche, à côté de la banque.";
+  if (state.view === "perso" && state.analyzing) return "Lecture de vos dossiers…";
+  if (state.view === "playlist" && !playlistOf(state.playlistId)?.ids.length) return "Playlist vide. Sélectionnez un son, puis « Ajouter à une playlist » dans le panneau de droite.";
   if (state.view === "recents" && !state.recents.length) return "Les sons que vous écoutez apparaîtront ici.";
   return "Aucun son ne correspond. Essayez « porte », « impact » ou « pluie ».";
 }
@@ -519,13 +587,14 @@ function emptyText(): string {
 function row(s: Sound): string {
   const sel = s.id === state.selId;
   const playing = s.id === state.playingId && !audio.paused;
-  const away = state.offline && !state.local.has(s.id);
+  const away = state.offline && !isLocal(s);
   return `<div class="row${away ? " away" : ""}" role="option" data-id="${s.id}" aria-selected="${sel}" title="${away ? "Hors ligne : ce son n'est pas encore sur cet ordinateur" : "Glissez vers votre timeline"}">
     <button class="play ${playing ? "on" : ""}" data-act="play" aria-label="${playing ? "Pause" : "Écouter"} ${esc(s.title)}">${playing ? ICON.pause : ICON.play}</button>
     <div class="t"><b>${esc(s.title)}</b><span>${s.tags.map(esc).join(" · ")}</span></div>
     <span class="code">${s.code}</span>
     <div class="wave">${waveSvg(s.peaks, 60)}</div>
     <span class="dur">${formatDuration(s.durationMs)}</span>
+    <button class="row-fav" data-act="fav-row" aria-pressed="${state.favs.has(s.id)}" aria-label="${state.favs.has(s.id) ? "Retirer des titres likés" : "Ajouter aux titres likés"}">${state.favs.has(s.id) ? ICON.starOn : ICON.star}</button>
     <span class="grip" aria-hidden="true">${ICON.grip}</span>
   </div>`;
 }
@@ -541,14 +610,21 @@ function detail(s: Sound): string {
     <div class="transport">
       <button class="play big ${playing ? "on" : ""}" data-act="play-sel" aria-label="${playing ? "Pause" : "Écouter"}">${playing ? ICON.pause : ICON.play}</button>
       <span class="mono" id="time">00:00.00 / ${formatDuration(s.durationMs)}</span>
-      <button class="sq-btn" data-act="fav" aria-pressed="${fav}" aria-label="${fav ? "Retirer des favoris" : "Ajouter aux favoris"}">${fav ? ICON.starOn : ICON.star}</button>
+      <button class="sq-btn" data-act="fav" aria-pressed="${fav}" aria-label="${fav ? "Retirer des titres likés" : "Ajouter aux titres likés"}">${fav ? ICON.starOn : ICON.star}</button>
+    </div>
+    <div class="pl-add">
+      <button class="secondary" data-act="pl-menu" aria-expanded="${state.plMenu}">${ICON.list}Ajouter à une playlist</button>
+      ${state.plMenu ? `<div class="pl-menu" role="menu">
+        ${state.playlists.map((p) => `<button role="menuitemcheckbox" data-act="pl-toggle" data-pl="${p.id}" aria-checked="${p.ids.includes(s.id)}"><span class="box" aria-hidden="true">${p.ids.includes(s.id) ? "✓" : ""}</span>${esc(p.name)}</button>`).join("")}
+        <button role="menuitem" data-act="pl-new-with"><span class="box" aria-hidden="true">+</span>Nouvelle playlist avec ce son</button>
+      </div>` : ""}
     </div>
     ${s.description ? `<p class="desc">${esc(s.description)}</p>` : ""}
     <dl class="facts">
       <div><dt>Format</dt><dd>${esc(s.format)}</dd></div>
       <div><dt>Catégorie</dt><dd>${esc(s.category)}</dd></div>
       <div><dt>Licence</dt><dd>${s.license === "CC0" ? "CC0 · sans crédit obligatoire" : esc(s.license)}</dd></div>
-      <div><dt>Code UCS</dt><dd>${s.code}</dd></div>
+      ${s.local ? `<div><dt>Fichier</dt><dd class="path">${esc(s.file)}</dd></div>` : `<div><dt>Code UCS</dt><dd>${s.code}</dd></div>`}
     </dl>
     <div class="tags">${s.tags.map((t) => `<span>${esc(t)}</span>`).join("")}</div>
     ${s.credit ? `<p class="credit">Son : <button class="link-btn" data-act="source" title="Ouvrir la page du son">${esc(s.credit)} ↗</button></p>` : ""}
@@ -573,6 +649,7 @@ function minibar(s: Sound): string {
 const inflight = new Map<string, Promise<string>>();
 
 async function localPath(s: Sound): Promise<string> {
+  if (s.local) return s.local; // son personnel : déjà sur l'ordinateur
   const known = state.paths.get(s.id);
   if (known) return known;
   let job = inflight.get(s.id);
@@ -591,10 +668,10 @@ async function togglePlay(id: string): Promise<void> {
   if (!s) return;
   if (state.playingId === id && !audio.paused) { audio.pause(); render(); return; }
   state.selId = id;
-  if (state.offline && !state.local.has(id)) { toast("Hors ligne : ce son n'est pas encore sur cet ordinateur."); render(); return; }
+  if (state.offline && !isLocal(s)) { toast("Hors ligne : ce son n'est pas encore sur cet ordinateur."); render(); return; }
   try {
     if (state.playingId !== id) {
-      if (state.cdn && !state.offline) {
+      if (state.cdn && !state.offline && !s.local) {
         audio.src = api.streamUrl(state.cdn, s); // la lecture démarre tout de suite…
         void localPath(s).catch(() => {});      // …pendant que le fichier arrive sur le disque
       } else {
@@ -686,7 +763,7 @@ root.addEventListener("pointermove", async (e) => {
   const s = byId(pending.id);
   pending = null;
   if (!s) return;
-  if (state.offline && !state.local.has(s.id)) { toast("Hors ligne : ce son n'est pas encore sur cet ordinateur."); return; }
+  if (state.offline && !isLocal(s)) { toast("Hors ligne : ce son n'est pas encore sur cet ordinateur."); return; }
   dragging = true;
   try {
     const ready = state.paths.has(s.id);
@@ -694,7 +771,7 @@ root.addEventListener("pointermove", async (e) => {
     const path = await localPath(s);
     if (!ready && !mouseDown) { toast("Son prêt : attrapez-le à nouveau pour le glisser."); return; }
     await api.dragOut([path]);
-    void api.markDragged(path).catch(() => {}); // utilisé dans un montage : ne sera jamais effacé
+    if (!s.local) void api.markDragged(path).catch(() => {}); // utilisé dans un montage : ne sera jamais effacé
   } catch (err) {
     toast(api.inTauri ? `Glisser impossible : ${err instanceof Error ? err.message : err}` : "Le glisser-déposer vers un logiciel fonctionne dans l'application Onde, pas dans le navigateur.");
   } finally {
@@ -713,7 +790,8 @@ root.addEventListener("click", async (e) => {
   const catBtn = t.closest<HTMLElement>("[data-cat]");
 
   if (state.intOpen && !t.closest(".popover") && act !== "integrations") { state.intOpen = false; render(); }
-  if (view) { if (state.screen === "contrib") { contrib.stop(); state.screen = "biblio"; } state.view = view; state.category = null; state.limit = 150; render(); return; }
+  if (state.plMenu && !t.closest(".pl-add")) { state.plMenu = false; render(); }
+  if (view) { if (state.screen === "contrib") { contrib.stop(); state.screen = "biblio"; } state.screen = "biblio"; state.view = view; state.playlistId = null; state.plDelete = false; state.category = null; state.limit = 150; render(); return; }
   if (catBtn) { if (state.screen === "contrib") { contrib.stop(); state.screen = "biblio"; } state.category = catBtn.dataset.cat || null; state.limit = 150; render(); return; }
 
   if (act?.startsWith("ob-")) { await accueilAction(act, t); return; }
@@ -726,6 +804,34 @@ root.addEventListener("click", async (e) => {
     case "play": if (rowEl) await togglePlay(rowEl.dataset.id!); return;
     case "play-sel": if (state.selId) await togglePlay(state.selId); return;
     case "fav": toggleFav(); return;
+    case "fav-row": toggleFav(t.closest<HTMLElement>(".row")?.dataset.id ?? null); return;
+    case "cats-toggle": state.catsOpen = !state.catsOpen; store.set("onde.categoriesOuvertes", state.catsOpen); render(); return;
+    case "pl-open": openPlaylist(t.closest<HTMLElement>("[data-pl]")!.dataset.pl!); return;
+    case "pl-new": openPlaylist(newPlaylist().id); document.getElementById("pl-name")?.focus(); (document.getElementById("pl-name") as HTMLInputElement | null)?.select(); return;
+    case "pl-new-with": { const p = newPlaylist(); if (state.selId) p.ids.push(state.selId); savePlaylists(); state.plMenu = false; toast(`Ajouté à « ${p.name} »`); render(); return; }
+    case "pl-menu": state.plMenu = !state.plMenu; render(); return;
+    case "pl-toggle": {
+      const p = playlistOf(t.closest<HTMLElement>("[data-pl]")!.dataset.pl!);
+      const id = state.selId;
+      if (!p || !id) return;
+      if (p.ids.includes(id)) p.ids = p.ids.filter((x) => x !== id); else p.ids.push(id);
+      savePlaylists(); render(); return;
+    }
+    case "pl-delete": state.plDelete = true; render(); return;
+    case "pl-delete-no": state.plDelete = false; render(); return;
+    case "pl-delete-yes": state.playlists = state.playlists.filter((p) => p.id !== state.playlistId); savePlaylists(); state.plDelete = false; state.view = "favoris"; state.playlistId = null; render(); return;
+    case "dir-add": {
+      const picked = await api.chooseFolder("");
+      if (!picked) return;
+      try { state.userDirs = await api.addUserDir(picked); toast("Dossier ajouté : lecture de vos sons…"); void loadPerso(); } catch (e) { toast(`Dossier impossible à ajouter : ${e instanceof Error ? e.message : e}`); }
+      render(); return;
+    }
+    case "dir-remove": {
+      const dir = t.closest<HTMLElement>("[data-dir]")!.dataset.dir!;
+      try { state.userDirs = await api.removeUserDir(dir); void loadPerso(); } catch (e) { toast(`Impossible : ${e instanceof Error ? e.message : e}`); }
+      render(); return;
+    }
+    case "dir-rescan": toast("Mise à jour de vos sons…"); void loadPerso(); return;
     case "reveal": {
       const s = byId(state.selId);
       if (s) { try { await api.revealInFolder(await localPath(s)); } catch { toast("Impossible d'ouvrir le dossier."); } }
@@ -792,13 +898,70 @@ root.addEventListener("dblclick", (e) => {
 root.addEventListener("input", (e) => {
   const t = e.target as HTMLInputElement;
   if (t.id === "q") { state.query = t.value; state.limit = 150; render(); }
+  if (t.id === "pl-name") { const p = playlistOf(state.playlistId); if (p) { p.name = t.value; savePlaylists(); const nav = document.querySelector(`.side [data-pl="${p.id}"] span`); if (nav) nav.lastChild!.textContent = t.value; } }
   if (t.id?.startsWith("cb-")) contrib.input(t);
   if (state.feedback && t.id === "fb-msg") state.feedback.message = t.value;
   if (state.feedback && t.id === "fb-mail") { state.feedback.email = t.value; store.set("onde.email", t.value); }
 });
 
-function toggleFav(): void {
-  const id = state.selId;
+root.addEventListener("change", (e) => {
+  const t = e.target as HTMLSelectElement;
+  if (t.id === "cat-select") { state.category = t.value || null; state.limit = 150; render(); }
+});
+
+// ---------- Playlists ----------
+function newPlaylist(): Playlist {
+  let n = state.playlists.length + 1;
+  const name = (k: number) => `Biblio n°${String(k).padStart(2, "0")}`;
+  while (state.playlists.some((p) => p.name === name(n))) n++;
+  const p: Playlist = { id: `pl-${Date.now().toString(36)}`, name: name(n), ids: [] };
+  state.playlists.push(p);
+  savePlaylists();
+  return p;
+}
+
+function openPlaylist(id: string): void {
+  if (state.screen === "contrib") contrib.stop();
+  state.screen = "biblio";
+  state.view = "playlist";
+  state.playlistId = id;
+  state.category = null;
+  state.plDelete = false;
+  state.limit = 150;
+  render();
+}
+
+// ---------- Sons personnels ----------
+let persoRun = 0;
+/** Lit les dossiers personnels, puis analyse les nouveaux sons par petits paquets. */
+async function loadPerso(): Promise<void> {
+  const run = ++persoRun;
+  try {
+    state.userDirs = await api.getUserDirs();
+    const found = await api.scanUserSounds();
+    if (run !== persoRun) return;
+    const sorted = (l: Sound[]) => l.sort((a, b) => normalize(a.title).localeCompare(normalize(b.title), "fr"));
+    state.perso = sorted(found.map(toSound));
+    const todo = found.filter((u) => u.peaks === null);
+    state.analyzing = todo.length;
+    render();
+    for (let i = 0; i < todo.length; i += 12) {
+      const done = await api.analyzeUserSounds(todo.slice(i, i + 12));
+      if (run !== persoRun) return;
+      const byPath = new Map(done.map((u) => [u.path, toSound(u)]));
+      state.perso = state.perso.map((x) => (x.local && byPath.get(x.local)) || x);
+      state.analyzing = Math.max(0, todo.length - i - 12);
+      render();
+    }
+  } catch (e) {
+    console.error("Sons personnels :", e);
+  }
+  state.analyzing = 0;
+  render();
+}
+
+function toggleFav(target: string | null = state.selId): void {
+  const id = target;
   if (!id) return;
   if (state.favs.has(id)) state.favs.delete(id); else state.favs.add(id);
   store.set("onde.favoris", [...state.favs]);
@@ -820,7 +983,8 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "BUTTON") { e.preventDefault(); void accueilAction("ob-next", document.body); }
     return;
   }
-  const typing = (e.target as HTMLElement).tagName === "INPUT";
+  if ((e.target as HTMLElement).id === "pl-name") { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLElement).blur(); return; }
+  const typing = ["INPUT", "SELECT"].includes((e.target as HTMLElement).tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("q")?.focus(); return; }
   if (e.key === "Escape") {
     if (state.intOpen) { state.intOpen = false; render(); }
@@ -910,6 +1074,7 @@ async function start(): Promise<void> {
   if ((seen || !firstRun) && seen !== state.version) state.news = notesHtml(state.version);
   store.set("onde.versionVue", state.version);
   if (state.news) render();
+  void loadPerso();
   void api.contributionsOpen().then((open) => { state.contribOpen = open; if (open) render(); });
   state.update = await api.checkForUpdate();
   if (state.update) render();
