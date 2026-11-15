@@ -376,3 +376,7 @@ button { cursor: pointer; }
 .mac .brand { padding-left: 84px; }
 .mac .tb-actions { padding-right: 10px; }
 .mac .ob-bar { justify-content: flex-start; }
+
+/* ---------- Animation de lancement ---------- */
+.launch { position: fixed; inset: 0; z-index: 100; background: #002fa7; display: grid; place-items: center; cursor: pointer; }
+.ln-icon { width: 120px; height: 120px; overflow: visible; }

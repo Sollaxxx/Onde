@@ -5,6 +5,7 @@ import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 import { introWanted, playIntro } from "./intro";
 import { playOutro } from "./outro";
+import { launchWanted, playLaunch } from "./lancement";
 import { createContributions } from "./contribuer";
 
 // ---------- État ----------
@@ -34,6 +35,7 @@ const state = {
   update: null as UpdateInfo | null,
   screen: "biblio" as "biblio" | "reglages" | "accueil" | "contrib",
   contribOpen: false, // contributions ouvertes par le serveur
+  launchAnim: store.get("onde.animDemarrage", true),
   premiere: null as api.PanelStatus | null,
   installing: false,
   feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
@@ -176,6 +178,12 @@ function settingsScreen(): string {
           <div><b>Mode</b><span>Le mode sombre est plus doux en salle de montage.</span></div>
           <div class="segmented" role="radiogroup" aria-label="Mode d'affichage">
             ${themes.map(([v, label]) => `<button role="radio" data-act="theme-set" data-value="${v}" aria-checked="${state.theme === v}">${label}</button>`).join("")}
+          </div>
+        </div>
+        <div class="set-row">
+          <div><b>Animation au démarrage</b><span>La petite animation du logo à chaque ouverture d'Onde.</span></div>
+          <div class="segmented" role="radiogroup" aria-label="Animation au démarrage">
+            <button role="radio" data-act="launch-set" data-value="1" aria-checked="${state.launchAnim}">Activée</button><button role="radio" data-act="launch-set" data-value="0" aria-checked="${!state.launchAnim}">Désactivée</button>
           </div>
         </div>
       </section>
@@ -652,6 +660,7 @@ root.addEventListener("click", async (e) => {
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
+    case "launch-set": state.launchAnim = t.closest<HTMLElement>("[data-value]")!.dataset.value === "1"; store.set("onde.animDemarrage", state.launchAnim); render(); return;
     case "replay-accueil": {
       if (!introWanted()) { await openAccueil(); return; }
       await playIntro(openAccueil().then(nextFrame));
@@ -773,6 +782,15 @@ async function start(): Promise<void> {
     await nextFrame();
     void api.showWindow();
     await intro;
+    if (!ok) return;
+  } else if (!firstRun && launchWanted(state.launchAnim)) {
+    // Lancements suivants : petite animation du logo pendant que la bibliothèque charge.
+    let ok = true;
+    const ready = loadLibrary().then(async (loaded) => { ok = loaded; if (loaded) render(); await nextFrame(); });
+    const anim = playLaunch(ready);
+    await nextFrame();
+    void api.showWindow();
+    await anim;
     if (!ok) return;
   } else {
     const loaded = await loadLibrary();
