@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager, State};
 
@@ -85,6 +86,9 @@ fn read_catalog(app: &AppHandle) -> Result<Vec<Sound>, String> {
 #[serde(rename_all = "camelCase")]
 struct Settings {
     library_dir: Option<String>,
+    /// Nettoyage automatique : nombre de jours sans écoute avant d'effacer un son jamais glissé.
+    /// Absent = 30 jours ; 0 = jamais.
+    cleanup_days: Option<u32>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -453,6 +457,7 @@ async fn ensure_local(app: AppHandle, store: State<'_, Store>, id: String) -> Re
     let dir = library_root(&app)?.join(&sound.code);
     let dest = dir.join(if test { file_name(&sound) } else { sound.file.clone() });
     if dest.exists() {
+        record_use(&app, &dest, false);
         return Ok(dest.to_string_lossy().into_owned());
     }
     fs::create_dir_all(&dir).map_err(err)?;
@@ -477,7 +482,179 @@ async fn ensure_local(app: AppHandle, store: State<'_, Store>, id: String) -> Re
         fs::write(&part, &bytes).map_err(err)?;
         fs::rename(&part, &dest).map_err(err)?;
     }
+    record_use(&app, &dest, false);
     Ok(dest.to_string_lossy().into_owned())
+}
+
+// ---------- Nettoyage automatique ----------
+// Chaque son écouté est téléchargé dans la bibliothèque. Pour ne pas remplir le disque,
+// les sons seulement écoutés sont effacés après N jours sans écoute.
+// Un son glissé dans un logiciel de montage n'est JAMAIS effacé : un projet s'en sert peut-être.
+// Les fichiers inconnus du registre (ajoutés à la main, par le panneau Premiere…) ne sont jamais touchés.
+
+const DEFAULT_CLEANUP_DAYS: u32 = 30;
+
+#[derive(Serialize, Deserialize, Clone)]
+struct FileUse {
+    /// Dernière écoute (secondes depuis 1970)
+    last: u64,
+    /// Glissé au moins une fois dans un logiciel : conservé pour toujours
+    #[serde(default)]
+    dragged: bool,
+}
+
+static USES_LOCK: Mutex<()> = Mutex::new(());
+
+fn now_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+fn uses_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app.path().app_data_dir().map_err(err)?.join("utilisation-sons.json"))
+}
+
+fn load_uses(app: &AppHandle) -> HashMap<String, FileUse> {
+    uses_path(app).ok().and_then(|p| fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+}
+
+fn save_uses(app: &AppHandle, uses: &HashMap<String, FileUse>) {
+    if let Ok(p) = uses_path(app) {
+        if let Some(dir) = p.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        let tmp = p.with_extension("tmp");
+        if serde_json::to_vec(uses).ok().and_then(|b| fs::write(&tmp, b).ok()).is_some() {
+            let _ = fs::rename(&tmp, &p);
+        }
+    }
+}
+
+/// Met à jour le registre pour ce fichier (écouté maintenant, et éventuellement glissé).
+fn record_use(app: &AppHandle, path: &Path, dragged: bool) {
+    let _g = USES_LOCK.lock();
+    let mut uses = load_uses(app);
+    let e = uses.entry(path.to_string_lossy().into_owned()).or_insert(FileUse { last: 0, dragged: false });
+    e.last = now_secs();
+    e.dragged |= dragged;
+    save_uses(app, &uses);
+}
+
+/// Le son vient d'être glissé dans un logiciel : on ne l'effacera jamais.
+#[tauri::command]
+fn mark_dragged(app: AppHandle, path: String) {
+    record_use(&app, Path::new(&path), true);
+}
+
+/// Noms des fichiers glissés depuis le panneau Premiere (il les note dans sons-glisses.txt).
+/// On compare par nom de fichier : chaque son a un nom unique, et l'écriture du chemin peut varier.
+fn panel_used(app: &AppHandle) -> std::collections::HashSet<String> {
+    let Ok(cfg) = app.path().app_config_dir() else { return Default::default() };
+    fs::read_to_string(cfg.join("sons-glisses.txt"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| Path::new(l.trim()).file_name().map(|n| n.to_string_lossy().to_lowercase()))
+        .collect()
+}
+
+fn used_in_panel(panel: &std::collections::HashSet<String>, path: &str) -> bool {
+    Path::new(path).file_name().is_some_and(|n| panel.contains(&n.to_string_lossy().to_lowercase()))
+}
+
+/// Règle du nettoyage, isolée pour être testée : efface les fichiers jamais glissés
+/// et pas écoutés depuis `limit` (secondes). Renvoie (nombre, octets libérés).
+fn sweep(uses: &mut HashMap<String, FileUse>, panel: &std::collections::HashSet<String>, limit: u64) -> (u32, u64) {
+    let (mut count, mut bytes) = (0u32, 0u64);
+    uses.retain(|path, u| {
+        if used_in_panel(panel, path) {
+            u.dragged = true; // glissé depuis Premiere : conservé pour toujours
+        }
+        if u.dragged || u.last >= limit {
+            return true;
+        }
+        let p = Path::new(path);
+        match fs::metadata(p) {
+            Ok(m) if m.is_file() => {
+                if fs::remove_file(p).is_err() {
+                    return true; // fichier ouvert ailleurs : on réessaiera plus tard
+                }
+                count += 1;
+                bytes += m.len();
+                // Range le dossier de catégorie s'il est devenu vide
+                if let Some(dir) = p.parent() {
+                    let _ = fs::remove_dir(dir);
+                }
+                false
+            }
+            _ => false, // déjà disparu : on l'oublie
+        }
+    });
+    (count, bytes)
+}
+
+/// Efface les sons jamais glissés et pas écoutés depuis `days` jours. Renvoie (nombre, octets libérés).
+fn cleanup(app: &AppHandle, days: u32) -> (u32, u64) {
+    if days == 0 {
+        return (0, 0);
+    }
+    let _g = USES_LOCK.lock();
+    let mut uses = load_uses(app);
+    let panel = panel_used(app);
+    let limit = now_secs().saturating_sub(days as u64 * 86_400);
+    let (count, bytes) = sweep(&mut uses, &panel, limit);
+    save_uses(app, &uses);
+    (count, bytes)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CleanupInfo {
+    days: u32,
+    /// Sons qui seront effacés au prochain nettoyage, et leur poids
+    pending_count: u32,
+    pending_bytes: u64,
+    /// Sons conservés car glissés dans un logiciel
+    kept_count: u32,
+}
+
+#[tauri::command]
+fn cleanup_info(app: AppHandle) -> CleanupInfo {
+    let days = load_settings(&app).cleanup_days.unwrap_or(DEFAULT_CLEANUP_DAYS);
+    let limit = now_secs().saturating_sub(days as u64 * 86_400);
+    let mut info = CleanupInfo { days, pending_count: 0, pending_bytes: 0, kept_count: 0 };
+    let panel = panel_used(&app);
+    for (path, u) in load_uses(&app) {
+        if u.dragged || used_in_panel(&panel, &path) {
+            info.kept_count += 1;
+        } else if days > 0 && u.last < limit {
+            if let Ok(m) = fs::metadata(&path) {
+                info.pending_count += 1;
+                info.pending_bytes += m.len();
+            }
+        }
+    }
+    info
+}
+
+#[tauri::command]
+fn set_cleanup_days(app: AppHandle, days: u32) -> Result<(), String> {
+    let mut settings = load_settings(&app);
+    settings.cleanup_days = Some(days);
+    save_settings(&app, &settings)
+}
+
+/// Sons déjà présents sur l'ordinateur (écoutables et glissables sans connexion).
+#[tauri::command]
+fn local_sounds(app: AppHandle, store: State<'_, Store>) -> Result<Vec<String>, String> {
+    let guard = store.0.lock().map_err(err)?;
+    let Some(catalog) = guard.as_ref() else { return Ok(vec![]) };
+    let root = library_root(&app)?;
+    let test = catalog.origin == "test";
+    Ok(catalog
+        .sounds
+        .iter()
+        .filter(|s| root.join(&s.code).join(if test { file_name(s) } else { s.file.clone() }).is_file())
+        .map(|s| s.id.clone())
+        .collect())
 }
 
 /// Image affichée sous le curseur pendant le glisser-déposer.
@@ -500,6 +677,15 @@ pub fn run() {
                 allow_playback(app.handle(), &dir);
                 write_library_hint(app.handle(), &dir);
             }
+            // Nettoyage automatique au démarrage, en arrière-plan (ne retarde jamais l'ouverture).
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let days = load_settings(&handle).cleanup_days.unwrap_or(DEFAULT_CLEANUP_DAYS);
+                let (n, b) = cleanup(&handle, days);
+                if n > 0 {
+                    eprintln!("Nettoyage : {n} sons effacés ({} Mo libérés)", b / 1_000_000);
+                }
+            });
             // Le module de mise à jour ne doit jamais empêcher l'app de démarrer,
             // par exemple tant que la clé publique n'est pas encore configurée.
             #[cfg(desktop)]
@@ -511,12 +697,49 @@ pub fn run() {
             if let Some(win) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_secs(4));
-                    let _ = win.show();
+                    if !win.is_visible().unwrap_or(true) {
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
                 });
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nettoyage_ne_touche_que_les_sons_seulement_ecoutes() {
+        let dir = std::env::temp_dir().join(format!("onde-test-{}", now_secs()));
+        let cat = dir.join("WHSH");
+        fs::create_dir_all(&cat).unwrap();
+        let f = |n: &str| { let p = cat.join(n); fs::write(&p, b"son").unwrap(); p.to_string_lossy().into_owned() };
+        let (ancien, recent, glisse, premiere, inconnu) = (f("ancien.wav"), f("recent.wav"), f("glisse.wav"), f("premiere.wav"), f("inconnu.wav"));
+        let now = 10_000_000;
+        let limit = now - 30 * 86_400;
+        let mut uses = HashMap::new();
+        uses.insert(ancien.clone(), FileUse { last: limit - 1, dragged: false });
+        uses.insert(recent.clone(), FileUse { last: now, dragged: false });
+        uses.insert(glisse.clone(), FileUse { last: 0, dragged: true });
+        uses.insert(premiere.clone(), FileUse { last: 0, dragged: false });
+        uses.insert(cat.join("disparu.wav").to_string_lossy().into_owned(), FileUse { last: 0, dragged: false });
+        let panel: std::collections::HashSet<String> = ["PREMIERE.wav".to_lowercase()].into();
+
+        let (n, b) = sweep(&mut uses, &panel, limit);
+
+        assert_eq!((n, b), (1, 3), "seul l'ancien son écouté est effacé");
+        assert!(!Path::new(&ancien).exists());
+        for p in [&recent, &glisse, &premiere, &inconnu] {
+            assert!(Path::new(p).exists(), "{p} doit rester");
+        }
+        assert!(uses[&premiere].dragged, "glissé depuis Premiere : marqué comme utilisé");
+        assert_eq!(uses.len(), 3, "les fichiers effacés ou disparus sont oubliés");
+        fs::remove_dir_all(&dir).unwrap();
+    }
 }

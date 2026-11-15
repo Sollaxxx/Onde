@@ -94,11 +94,35 @@ export async function setLibraryDir(path: string | null): Promise<string> {
   return inTauri ? invoke<string>("set_library_dir", { path }) : path ?? "Documents\\Onde";
 }
 
+/** Identifiants des sons déjà présents sur l'ordinateur (utilisables hors ligne). */
+export async function localSounds(): Promise<string[]> {
+  return inTauri ? invoke<string[]>("local_sounds") : [];
+}
+
+/** Le son a été glissé dans un logiciel : il ne sera jamais effacé par le nettoyage automatique. */
+export async function markDragged(path: string): Promise<void> {
+  if (inTauri) await invoke("mark_dragged", { path });
+}
+
+export interface CleanupInfo { days: number; pendingCount: number; pendingBytes: number; keptCount: number }
+
+/** Réglage du nettoyage automatique (jours sans écoute avant d'effacer ; 0 = jamais). */
+export async function cleanupInfo(): Promise<CleanupInfo | null> {
+  return inTauri ? invoke<CleanupInfo>("cleanup_info") : null;
+}
+
+export async function setCleanupDays(days: number): Promise<void> {
+  if (inTauri) await invoke("set_cleanup_days", { days });
+}
+
 /** Affiche la fenêtre (elle démarre cachée pour éviter un flash blanc). */
 export async function showWindow(): Promise<void> {
   if (!inTauri) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().show();
+  const win = getCurrentWindow();
+  await win.show();
+  // Au premier plan, sinon sur Mac l'application démarre derrière les autres fenêtres
+  await win.setFocus().catch(() => {});
 }
 
 export interface PanelStatus { installed: string | null; bundled: string | null }
