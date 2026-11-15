@@ -208,6 +208,26 @@ footer a{text-decoration:none;color:var(--ink-2)}
 footer a:hover{color:var(--ink)}
 
 .lang-btn{width:auto;padding:0 12px;font:500 12px/1 var(--f-mono);letter-spacing:.06em;text-decoration:none}
+
+/* Téléchargement + aide SmartScreen */
+.dl{display:grid;gap:14px;align-content:start}
+.dl .btn-xl{min-height:64px;padding:0 28px;font-size:18px}
+.dl-meta{font:500 12px/1.4 var(--f-mono);letter-spacing:.04em;color:var(--muted)}
+.ss{border:1px solid var(--line);background:var(--surface);padding:20px;display:grid;gap:14px;scroll-margin-top:100px;transition:border-color .5s var(--ease),box-shadow .5s var(--ease)}
+.ss.flash{border-color:var(--blue);box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 18%,transparent)}
+.ss h3{margin:0;font:700 20px/1.2 var(--f-display);letter-spacing:-.01em}
+.ss p{margin:0;color:var(--ink-2)}
+.ss-steps{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:560px){.ss-steps{grid-template-columns:minmax(0,1fr)}}
+.ss-step{display:grid;gap:8px}
+.ss-step b{font:600 14px var(--f-text)}
+.ss-step b span{font:500 12px var(--f-mono);color:var(--blue);margin-right:6px}
+.win{background:#0f5ea8;color:#fff;padding:14px;font:400 12px/1.35 "Segoe UI",system-ui,sans-serif;min-height:150px;display:flex;flex-direction:column;gap:8px;user-select:none}
+.win .t{font-size:17px;font-weight:300}
+.win .l{text-decoration:underline;align-self:flex-start;padding:2px 4px;margin:-2px -4px}
+.win .bt{margin-top:auto;display:flex;justify-content:flex-end;gap:6px}
+.win .bt span{border:1px solid rgba(255,255,255,.75);padding:5px 12px}
+.win .hl{outline:3px solid var(--red);outline-offset:2px}
 /* Liste d'attente */
 .final{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px 56px;align-items:end}
 @media (max-width:860px){.final{grid-template-columns:minmax(0,1fr)}}
@@ -252,7 +272,7 @@ footer a:hover{color:var(--ink)}
       <button class="icon-btn" id="themeBtn" type="button" aria-label="Changer de mode clair ou sombre">
         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v18H3V3z" fill="currentColor"/></svg>
       </button>
-      <a class="btn btn-primary btn-sm" href="#beta"><span>Rejoindre la bêta</span></a>
+      <a class="btn btn-primary btn-sm js-dl" href="/telecharger"><span>Télécharger</span></a>
     </div>
   </div>
 </header>
@@ -265,9 +285,9 @@ footer a:hover{color:var(--ink)}
       <div class="hero-row">
         <p class="lede">Cherchez un son, écoutez-le, glissez-le dans votre timeline. Onde fonctionne avec Premiere Pro, DaVinci Resolve, Final Cut, CapCut et tous les logiciels qui acceptent un fichier glissé.</p>
         <div class="cta">
-          <a class="btn btn-primary" href="#beta"><span>Rejoindre la bêta Windows</span><span class="arr" aria-hidden="true">→</span></a>
+          <a class="btn btn-primary js-dl" href="/telecharger"><span>Télécharger pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
           <a class="btn btn-ghost" href="#demo"><span>Essayer la démo</span></a>
-          <p class="cta-note mono">Gratuit · Sans abonnement · Bêta Windows bientôt, macOS ensuite</p>
+          <p class="cta-note mono">Gratuit · Sans compte · Windows 10 et 11 · <span class="js-ver">Bêta</span> · macOS bientôt</p>
         </div>
       </div>
 
@@ -340,7 +360,8 @@ footer a:hover{color:var(--ink)}
     <div class="faq reveal">
       <details><summary>Puis-je utiliser les sons dans un projet commercial ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Oui. Les sons de la bibliothèque de base sont sous licence CC0 : YouTube, publicité, film, client, sans créditer.</p></details>
       <details><summary>Et sur Mac ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Windows d'abord. La version macOS suit, avec la même application.</p></details>
-      <details><summary>Comment proposer mes propres sons ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Depuis l'application, dans Mes contributions. Chaque son est vérifié avant publication. Bientôt : une partie des revenus d'Onde sera reversée aux créateurs, selon l'utilisation réelle de leurs sons.</p></details>
+      <details><summary>Comment proposer mes propres sons ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Bientôt, directement depuis l'application. Chaque son sera vérifié avant publication. Et à terme, une partie des revenus d'Onde sera reversée aux créateurs, selon l'utilisation réelle de leurs sons.</p></details>
+      <details><summary>Windows affiche « Windows a protégé votre ordinateur » : est-ce normal ?<span class="pm" aria-hidden="true"></span></summary><p class="ans">Oui. Windows affiche ce message pour les logiciels qui ne sont pas encore signés par un certificat payant. Cliquez sur « Informations complémentaires », puis sur « Exécuter quand même ». Le code d'Onde est public et chaque mise à jour est signée.</p></details>
     </div>
   </section>
 
@@ -367,20 +388,34 @@ footer a:hover{color:var(--ink)}
     </div>
   </section>
 
-  <section class="wrap final" id="beta" aria-labelledby="h-final">
+  <section class="wrap final" id="telecharger" aria-labelledby="h-final">
     <div class="beta-text">
       <p class="eyebrow">Bêta Windows · gratuite</p>
       <h2 id="h-final">Votre prochain bruitage est à un glisser de là.</h2>
+      <div class="dl">
+        <a class="btn btn-primary btn-xl js-dl" href="/telecharger"><span>Télécharger Onde pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
+        <p class="dl-meta"><span class="js-ver">Bêta</span> · Windows 10 et 11 (64 bits) · Gratuit, sans compte · <a href="https://github.com/Sollaxxx/Onde/releases" rel="noopener">Toutes les versions</a></p>
+      </div>
+    </div>
+    <div class="ss" id="smartscreen" aria-labelledby="h-ss">
+      <h3 id="h-ss">Au premier lancement, Windows peut vous arrêter</h3>
+      <p>Il affiche « Windows a protégé votre ordinateur », comme pour tout logiciel gratuit pas encore signé par un certificat payant. Deux clics suffisent, une seule fois :</p>
+      <div class="ss-steps">
+        <div class="ss-step"><b><span>01</span>Cliquez sur « Informations complémentaires »</b>
+          <div class="win" aria-hidden="true"><span class="t">Windows a protégé votre ordinateur</span><span>Microsoft Defender SmartScreen a empêché le démarrage d'une application non reconnue.</span><span class="l hl">Informations complémentaires</span><span class="bt"><span>Ne pas exécuter</span></span></div></div>
+        <div class="ss-step"><b><span>02</span>Puis sur « Exécuter quand même »</b>
+          <div class="win" aria-hidden="true"><span class="t">Windows a protégé votre ordinateur</span><span>Application : Onde_x64-setup.exe<br>Éditeur : Éditeur inconnu</span><span class="bt"><span class="hl">Exécuter quand même</span><span>Ne pas exécuter</span></span></div></div>
+      </div>
     </div>
     <form class="waitlist" id="waitlist" novalidate>
-      <label for="wl-email">Recevez la bêta en avant-première</label>
+      <label for="wl-email">Être prévenu du lancement public et de la version macOS</label>
       <div class="wl-row">
         <input id="wl-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@exemple.fr" required>
-        <button class="btn btn-primary" type="submit"><span id="wl-btn">Rejoindre la bêta</span><span class="arr" aria-hidden="true">→</span></button>
+        <button class="btn btn-primary" type="submit"><span id="wl-btn">Me prévenir</span><span class="arr" aria-hidden="true">→</span></button>
       </div>
       <input class="hp" type="text" name="site" tabindex="-1" autocomplete="off" aria-hidden="true">
       <p class="wl-msg" id="wl-msg" role="status"></p>
-      <p class="wl-note">Un seul e-mail : celui qui annonce la bêta. Pas de publicité, pas de revente. <a href="/confidentialite">Confidentialité</a></p>
+      <p class="wl-note">Quelques e-mails au plus, seulement pour les grandes étapes. Pas de publicité, pas de revente. <a href="/confidentialite">Confidentialité</a></p>
     </form>
   </section>
 </main>
@@ -648,11 +683,30 @@ footer a:hover{color:var(--ink)}
       body: JSON.stringify({ email: email, site: form.site.value, lang: 'fr' })
     }).then(function(r){ return r.json().catch(function(){ return { ok: false }; }); })
       .then(function(res){
-        if(res.ok){ show('C\u2019est noté. Vous recevrez la bêta dès qu\u2019elle est prête.', true); form.reset(); }
+        if(res.ok){ show('C\u2019est noté. On vous prévient au lancement public.', true); form.reset(); }
         else { show(res.error || 'L\u2019inscription n\u2019a pas fonctionné. Réessayez dans un instant.', false); }
       })
       .catch(function(){ show('Pas de connexion au serveur. Réessayez dans un instant.', false); })
-      .then(function(){ btn.textContent = 'Rejoindre la bêta'; });
+      .then(function(){ btn.textContent = 'Me prévenir'; });
+  });
+})();
+
+/* ---- Téléchargement : version affichée, et aide SmartScreen mise en avant au clic ---- */
+(function(){
+  fetch('/api/version').then(function(r){ return r.ok ? r.json() : null; }).then(function(d){
+    if(!d || !d.version) return;
+    document.querySelectorAll('.js-ver').forEach(function(el){ el.textContent = 'Bêta ' + d.version; });
+  }).catch(function(){});
+  var ss = document.getElementById('smartscreen');
+  document.querySelectorAll('.js-dl').forEach(function(a){
+    a.addEventListener('click', function(){
+      if(!ss) return;
+      setTimeout(function(){
+        ss.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        ss.classList.add('flash');
+        setTimeout(function(){ ss.classList.remove('flash'); }, 2600);
+      }, 400);
+    });
   });
 })();
 </script>
