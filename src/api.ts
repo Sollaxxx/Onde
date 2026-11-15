@@ -4,6 +4,10 @@
 import type { Catalog, Sound, UpdateInfo } from "./types";
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
+/** Onde tourne sur un Mac (feux tricolores d'Apple, raccourcis avec ⌘). */
+export const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+/** Touche de raccourci affichée : ⌘ sur Mac, CTRL ailleurs. */
+export const MOD = isMac ? "⌘" : "CTRL";
 /** Adresse publique de la bibliothèque (bucket Cloudflare R2). */
 export const CDN = "https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev";
 

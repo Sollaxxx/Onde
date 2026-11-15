@@ -47,6 +47,7 @@ const state = {
 const audio = new Audio();
 audio.preload = "auto";
 const root = document.getElementById("app")!;
+if (api.isMac && api.inTauri) document.body.classList.add("mac");
 
 // ---------- Petites aides ----------
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -157,7 +158,7 @@ async function changeLibrary(path: string | null): Promise<void> {
 function settingsScreen(): string {
   const sections: [string, string][] = [["r-app", "Apparence"], ["r-lib", "Dossier des sons"], ["r-keys", "Raccourcis"], ["r-upd", "Mises à jour"], ["r-about", "À propos"]];
   const themes: [Theme, string][] = [["clair", "Clair"], ["sombre", "Sombre"], ["systeme", "Comme Windows"]];
-  const keys: [string, string][] = [["Rechercher", "CTRL K"], ["Écouter / pause", "ESPACE"], ["Son suivant / précédent", "↓ ↑"], ["Ajouter aux favoris", "F"], ["Fermer / revenir", "ÉCHAP"], ["Glisser vers la timeline", "SOURIS"]];
+  const keys: [string, string][] = [["Rechercher", `${api.MOD} K`], ["Écouter / pause", "ESPACE"], ["Son suivant / précédent", "↓ ↑"], ["Ajouter aux favoris", "F"], ["Fermer / revenir", "ÉCHAP"], ["Glisser vers la timeline", "SOURIS"]];
   return `<div class="settings">
     <nav class="side" aria-label="Sections des réglages">
       <div class="nav">
@@ -235,6 +236,7 @@ function titlebar(): string {
 }
 
 function winButtons(): string {
+  if (api.isMac && api.inTauri) return ""; // sur Mac : les feux tricolores d'Apple, en haut à gauche
   return `<div class="win">
         <button data-act="win-min" aria-label="Réduire"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor"/></svg></button>
         <button data-act="win-max" aria-label="Agrandir"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
@@ -440,7 +442,7 @@ function mainList(list: Sound[]): string {
     <div class="searchbar">${ICON.search}
       <label for="q" class="sr">Rechercher un son</label>
       <input id="q" type="search" value="${esc(state.query)}" placeholder="Décrivez un son : « porte qui grince », « whoosh »…" autocomplete="off" spellcheck="false" />
-      <span class="mono" style="color:var(--muted);border:1px solid var(--line);padding:3px 6px">CTRL K</span>
+      <span class="mono" style="color:var(--muted);border:1px solid var(--line);padding:3px 6px">${api.MOD} K</span>
     </div>
     <div class="chips">
       ${filters.map((c) => `<button class="chip" data-cat="${c ?? ""}" aria-pressed="${state.category === c}">${c ? esc(c) : "Tout"}</button>`).join("")}

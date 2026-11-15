@@ -39,7 +39,9 @@
   "bundle": {
     "active": true,
     "targets": [
-      "nsis"
+      "nsis",
+      "app",
+      "dmg"
     ],
     "category": "Video",
     "shortDescription": "Bruitages et musiques libres de droits pour monteurs",
@@ -65,6 +67,10 @@
         ],
         "displayLanguageSelector": false
       }
+    },
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "11.0"
     }
   },
   "plugins": {

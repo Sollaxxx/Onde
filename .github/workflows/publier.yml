@@ -1,9 +1,10 @@
 name: Publier une version
 
 # Lancement à la main : onglet Actions → « Publier une version » → Run workflow.
-# Compile l'installateur Windows, le signe avec la clé de mise à jour,
-# puis crée la version (Release) vMAJ.MIN.CORR avec le fichier latest.json
-# que les applications installées consultent pour se mettre à jour.
+# Compile l'installateur Windows, puis l'application Mac (Intel + Apple Silicon),
+# les signe avec la clé de mise à jour et crée la version (Release) vMAJ.MIN.CORR
+# avec le fichier latest.json que les applications installées consultent pour se mettre à jour.
+# Les deux étapes se suivent pour que latest.json réunisse proprement Windows et Mac.
 on:
   workflow_dispatch:
 
@@ -40,8 +41,45 @@ jobs:
           tagName: v__VERSION__
           releaseName: Onde v__VERSION__
           releaseBody: |
-            Téléchargez **Onde_x.y.z_x64-setup.exe** ci-dessous pour installer Onde sur Windows.
+            **Windows** : téléchargez **Onde_x.y.z_x64-setup.exe** ci-dessous.
+            **Mac** (Intel et Apple Silicon) : téléchargez **Onde_x.y.z_universal.dmg**. Au premier lancement, ouvrez Réglages Système → Confidentialité et sécurité → « Ouvrir quand même ».
             Si Onde est déjà installé, il vous propose cette version tout seul.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
+
+  mac:
+    needs: windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Compiler, signer et ajouter à la version
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Onde v__VERSION__
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin

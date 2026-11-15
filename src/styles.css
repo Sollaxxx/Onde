@@ -371,3 +371,8 @@ button { cursor: pointer; }
 .cb-detail > * { flex-shrink: 0; }
 .cb-detail .bigwave { cursor: default; }
 .cb-detail .bigwave .base { color: var(--wave-sel); }
+
+/* ---------- Mac : feux tricolores d'Apple en haut à gauche, dans la barre d'Onde ---------- */
+.mac .brand { padding-left: 84px; }
+.mac .tb-actions { padding-right: 10px; }
+.mac .ob-bar { justify-content: flex-start; }
