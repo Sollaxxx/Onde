@@ -83,7 +83,14 @@ export async function playLaunch(ready: Promise<void>, mode: LaunchMode): Promis
   $<SVGGElement>(".ln-iph").animate([{ transform: "translateY(-30px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 420, delay: 600, easing: BACK, ...fill });
   $$<SVGElement>(".ln-word circle, .ln-word path").forEach((p, i) => {
     p.style.strokeDasharray = "1";
-    p.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 420, delay: 160 + i * 75, easing: EASE, ...fill });
+    p.style.opacity = "0";
+    // Invisible avant son tour (pas de point parasite), puis trait plein à la fin (lettre bien refermée)
+    p.animate([
+      { strokeDashoffset: 1, opacity: 0 },
+      { strokeDashoffset: 0.97, opacity: 1, offset: 0.03 },
+      { strokeDashoffset: 0, opacity: 1, strokeDasharray: "1", offset: 0.98 },
+      { strokeDashoffset: 0, opacity: 1, strokeDasharray: "none" },
+    ], { duration: 420, delay: 160 + i * 75, easing: EASE, ...fill });
   });
 
   // 3. La tête de lecture tombe dans le « d » (à 0,8 s) : tic, ondes, barres

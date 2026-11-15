@@ -94,14 +94,19 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   head.style.opacity = "0";
   stem.style.transform = `translate(0px, 19.4px) scale(4.6, 0)`;
   for (const g of qa(".i-ticks, .i-clips > rect, .i-band, .ib")) g.style.opacity = "0";
-  for (const st of strokes) st.style.strokeDasharray = "1", st.style.strokeDashoffset = "1";
+  for (const st of strokes) st.style.strokeDasharray = "1", st.style.strokeDashoffset = "1", st.style.opacity = "0";
   svg.style.visibility = "";
 
   // 1. Le mot se dessine
   sfx((s) => s.strokes());
   strokes.forEach((s, i) => {
-    s.style.strokeDasharray = "1";
-    s.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 750, delay: 120 + i * 110, easing: EASE, ...fill });
+    // Invisible avant son tour (pas de point parasite), puis trait plein à la fin (lettre bien refermée)
+    s.animate([
+      { strokeDashoffset: 1, opacity: 0 },
+      { strokeDashoffset: 0.97, opacity: 1, offset: 0.03 },
+      { strokeDashoffset: 0, opacity: 1, strokeDasharray: "1", offset: 0.98 },
+      { strokeDashoffset: 0, opacity: 1, strokeDasharray: "none" },
+    ], { duration: 750, delay: 120 + i * 110, easing: EASE, ...fill });
   });
 
   // 2. La tête de lecture tombe dans le « d »

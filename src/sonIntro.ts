@@ -454,103 +454,104 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
           return [t0 + (t1 - t0) * u, Math.sin(a) * r, y, -Math.cos(a) * r] as [number, number, number, number];
         });
 
-      // 1. La salle s'éteint : grave qui gonfle, grondement, souffle qui tourne autour de la tête
+      // 1. La salle s'éteint : grave qui gonfle, grondement, souffle aspiré vers l'impact
       const sub = ctx.createOscillator();
       sub.frequency.setValueAtTime(D2 / 2, t);
-      sub.frequency.linearRampToValueAtTime(D2 / 2 * 1.06, T);
+      sub.frequency.exponentialRampToValueAtTime(D2 / 2 * 1.12, T);
       const gs = ctx.createGain();
       gs.gain.setValueAtTime(0, t);
-      gs.gain.linearRampToValueAtTime(0.5, T - 0.05);
-      gs.gain.linearRampToValueAtTime(0.0, T);
+      gs.gain.linearRampToValueAtTime(0.75, T - 0.03);
+      gs.gain.linearRampToValueAtTime(0.0, T + 0.01);
       sub.connect(gs); gs.connect(glue);
       sub.start(t); sub.stop(T + 0.1);
       const rum = noiseSrc(t, 1.2);
-      const rlp = ctx.createBiquadFilter(); rlp.type = "lowpass"; rlp.frequency.setValueAtTime(120, t); rlp.frequency.exponentialRampToValueAtTime(900, T);
-      const gr = ctx.createGain(); gr.gain.setValueAtTime(0, t); gr.gain.linearRampToValueAtTime(0.55, T - 0.04); gr.gain.linearRampToValueAtTime(0, T + 0.02);
+      const rlp = ctx.createBiquadFilter(); rlp.type = "lowpass"; rlp.frequency.setValueAtTime(90, t); rlp.frequency.exponentialRampToValueAtTime(700, T);
+      const gr = ctx.createGain(); gr.gain.setValueAtTime(0, t); gr.gain.linearRampToValueAtTime(0.9, T - 0.03); gr.gain.linearRampToValueAtTime(0, T + 0.02);
       rum.connect(rlp).connect(gr);
-      space(gr, [[t, 0, 0, 1.2]], 0.2);
-      const air = noiseSrc(t, 1.1);
-      const abp = ctx.createBiquadFilter(); abp.type = "bandpass"; abp.Q.value = 1.1; abp.frequency.setValueAtTime(500, t); abp.frequency.exponentialRampToValueAtTime(5500, T);
-      const ga = ctx.createGain(); ga.gain.setValueAtTime(0, t); ga.gain.linearRampToValueAtTime(0.45, T - 0.05); ga.gain.linearRampToValueAtTime(0, T + 0.03);
-      air.connect(abp).connect(ga);
-      space(ga, around(t, T, 0.5, 1.5, 1.3, 0.3, 16), 0.35);   // un tour complet, de derrière à derrière
-      // Projecteur de cinéma qui démarre derrière vous (cliquetis à 24 images/s qui accélère)
-      for (let c = t + 0.05, k = 0; c < T - 0.02; k++) {
+      space(gr, around(t, T, 0.5, 1.0, 1.2, -0.2, 8), 0.25);
+      // Souffle inversé : il gonfle et s'aspire jusqu'à l'impact, en tournant autour de la tête
+      const suck = noiseSrc(t + 0.1, 0.8);
+      const sbp = ctx.createBiquadFilter(); sbp.type = "bandpass"; sbp.Q.value = 0.9; sbp.frequency.setValueAtTime(300, t + 0.1); sbp.frequency.exponentialRampToValueAtTime(3500, T);
+      const gsk = ctx.createGain(); gsk.gain.setValueAtTime(0, t + 0.1); gsk.gain.exponentialRampToValueAtTime(0.02, t + 0.3); gsk.gain.exponentialRampToValueAtTime(0.55, T - 0.02); gsk.gain.linearRampToValueAtTime(0, T);
+      suck.connect(sbp).connect(gsk);
+      space(gsk, around(t + 0.1, T, 0.5, 1.5, 1.3, 0.2, 14), 0.35);
+      // Projecteur de cinéma qui démarre derrière vous (discret)
+      for (let c = t + 0.05, k = 0; c < T - 0.05; k++) {
         const g = ctx.createGain();
         const src = noiseSrc(c, 0.04);
-        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2400 + (k % 2) * 700; bp.Q.value = 3;
-        pluck(g.gain, c, 0.22, 0.001, 0.006);
+        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800 + (k % 2) * 500; bp.Q.value = 3;
+        pluck(g.gain, c, 0.12, 0.001, 0.006);
         src.connect(bp).connect(g);
         space(g, [[c, (k % 2 ? 0.4 : -0.4), 0.2, 1.1]], 0.15);
         c += Math.max(1 / 24, 0.09 - k * 0.004);
       }
-
-      // 2. Le logo se dessine : feutre à gauche, à droite, au-dessus
-      [[0.16, -1, 0.2, -0.6], [0.24, 1, 0.2, -0.6], [0.32, -0.5, 1, -0.6], [0.4, 0.5, 1, -0.6], [0.48, 0, 0.4, -1]].forEach(([o, x, y, z], i) => {
+      // Le tracé du logo : frottements graves et feutrés, sur les côtés
+      [[0.16, -1, 0.2, -0.6], [0.28, 1, 0.2, -0.6], [0.4, -0.6, 0.8, -0.6], [0.52, 0.6, 0.8, -0.6]].forEach(([o, x, y, z], i) => {
         const src = noiseSrc(t + o, 0.5);
-        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.3;
-        bp.frequency.setValueAtTime(2300 + i * 260, t + o); bp.frequency.exponentialRampToValueAtTime(4300 + i * 200, t + o + 0.3);
-        const g = ctx.createGain(); g.gain.setValueAtTime(0, t + o); g.gain.linearRampToValueAtTime(0.32, t + o + 0.04); g.gain.setTargetAtTime(0, t + o + 0.07, 0.07);
+        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.2;
+        bp.frequency.setValueAtTime(1200 + i * 150, t + o); bp.frequency.exponentialRampToValueAtTime(2600 + i * 150, t + o + 0.3);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0, t + o); g.gain.linearRampToValueAtTime(0.22, t + o + 0.04); g.gain.setTargetAtTime(0, t + o + 0.07, 0.08);
         src.connect(bp).connect(g);
         space(g, [[t + o, x, y, z]], 0.3);
       });
 
-      // 3. Impact cinéma quand la tête de lecture se pose
+      // 2. L'impact « BRAAM » : un mur de basses tout autour de la tête
+      // Sous-grave qui plonge dans l'infra
       const drop = ctx.createOscillator();
-      drop.frequency.setValueAtTime(95, T); drop.frequency.exponentialRampToValueAtTime(26, T + 1.4);
-      const gd = ctx.createGain(); pluck(gd.gain, T, 1.0, 0.004, 0.55);
+      drop.frequency.setValueAtTime(70, T); drop.frequency.exponentialRampToValueAtTime(24, T + 2.2);
+      const gd = ctx.createGain(); pluck(gd.gain, T, 1.0, 0.006, 0.9);
       drop.connect(gd); gd.connect(glue);
-      const sendHall = ctx.createGain(); sendHall.gain.value = 0.25; gd.connect(sendHall).connect(hall);
-      drop.start(T); drop.stop(T + 3.5);
+      const dh = ctx.createGain(); dh.gain.value = 0.2; gd.connect(dh).connect(hall);
+      drop.start(T); drop.stop(T + 6);
+      // Le « braam » : dents de scie très graves (ré et la, sans mélodie), filtre qui s'ouvre puis se referme,
+      // chaque voix placée dans une direction différente autour de l'auditeur
+      const braamLP = ctx.createBiquadFilter(); braamLP.type = "lowpass"; braamLP.Q.value = 2.5;
+      braamLP.frequency.setValueAtTime(90, T);
+      braamLP.frequency.exponentialRampToValueAtTime(1100, T + 0.12);
+      braamLP.frequency.exponentialRampToValueAtTime(260, T + 1.4);
+      braamLP.frequency.exponentialRampToValueAtTime(90, T + 3.2);
+      const braamSat = ctx.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) { const v = i / 511.5 - 1; curve[i] = Math.tanh(v * 2.6) / Math.tanh(2.6); }
+      braamSat.curve = curve;
+      const gb = ctx.createGain(); gb.gain.setValueAtTime(0, T); gb.gain.linearRampToValueAtTime(0.42, T + 0.04); gb.gain.setTargetAtTime(0, T + 0.25, 0.9);
+      braamLP.connect(braamSat).connect(gb);
+      const bsplit = ctx.createGain(); gb.connect(bsplit);
+      bsplit.connect(glue);
+      const bh = ctx.createGain(); bh.gain.value = 0.5; bsplit.connect(bh).connect(hall);
+      [[D2 / 2, -6, -1.2, 0, -0.4], [D2 / 2, 7, 1.2, 0, -0.4], [D2, -9, -0.8, 0.2, 1.0], [D2, 10, 0.8, 0.2, 1.0], [D2 * 1.5, -4, 0, 0.6, -1.0], [D2 * 1.5, 5, 0, -0.4, 1.2]].forEach(([f, det, x, y, z]) => {
+        const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; o.detune.value = det;
+        const g = ctx.createGain(); g.gain.value = 0.3;
+        o.connect(g);
+        const p = ctx.createPanner(); p.panningModel = "HRTF"; p.distanceModel = "inverse"; p.refDistance = 1; p.rolloffFactor = 0.4;
+        p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z;
+        g.connect(p).connect(braamLP);
+        o.start(T); o.stop(T + 5);
+      });
+      // Coup sec et grave au centre
       const thump = ctx.createOscillator();
-      thump.frequency.setValueAtTime(220, T); thump.frequency.exponentialRampToValueAtTime(55, T + 0.12);
-      const gth = ctx.createGain(); pluck(gth.gain, T, 0.8, 0.002, 0.07);
-      thump.connect(gth); space(gth, [[T, 0, 0, -0.8]], 0.2, 0.4);
-      thump.start(T); thump.stop(T + 0.6);
-      const crack = noiseSrc(T, 0.4);
-      const cbp = ctx.createBiquadFilter(); cbp.type = "bandpass"; cbp.frequency.value = 3200; cbp.Q.value = 0.7;
-      const gc = ctx.createGain(); pluck(gc.gain, T, 0.75, 0.0008, 0.035);
-      crack.connect(cbp).connect(gc); space(gc, [[T, 0, 0.2, -0.9]], 0.3, 0.6);
-      const tic = ctx.createOscillator();
-      tic.frequency.setValueAtTime(2600, T); tic.frequency.exponentialRampToValueAtTime(1200, T + 0.03);
-      const gt = ctx.createGain(); pluck(gt.gain, T, 0.35, 0.002, 0.025);
-      tic.connect(gt); space(gt, [[T, 0, 0.3, -0.7]], 0.4);
-      tic.start(T); tic.stop(T + 0.3);
-      // Résonances métalliques qui s'éloignent tout autour
-      [[311, 0.12, 1.6, 0.25], [523, 0.09, 1.3, 0.75], [887, 0.06, 1.0, 0.5], [1449, 0.04, 0.8, 0.0]].forEach(([f, a, tau, ang]) => {
-        const o = ctx.createOscillator(); o.frequency.value = f;
-        const g = ctx.createGain(); pluck(g.gain, T, a, 0.003, tau);
-        o.connect(g);
-        space(g, around(T, T + 2.2, ang, ang + 0.15, 1.0, 0.1, 6).map(([tt, x, y, z]) => [tt, x * 2.2, y, z * 2.2] as [number, number, number, number]), 0.4, 0.6);
-        o.start(T); o.stop(T + tau * 7);
-      });
+      thump.frequency.setValueAtTime(160, T); thump.frequency.exponentialRampToValueAtTime(42, T + 0.14);
+      const gth = ctx.createGain(); pluck(gth.gain, T, 0.9, 0.002, 0.09);
+      thump.connect(gth); space(gth, [[T, 0, 0, -0.8]], 0.2, 0.5);
+      thump.start(T); thump.stop(T + 0.8);
+      const crack = noiseSrc(T, 0.5);
+      const clp = ctx.createBiquadFilter(); clp.type = "lowpass"; clp.frequency.value = 2200;
+      const gc = ctx.createGain(); pluck(gc.gain, T, 0.6, 0.0008, 0.05);
+      crack.connect(clp).connect(gc); space(gc, [[T, 0, 0.1, -0.9]], 0.3, 0.7);
 
-      // 4. Les ondes : accord de ré lumineux dont chaque note part dans une direction différente
-      [[D2 * 8, 0.16, 0, 0.0], [D2 * 12, 0.12, 0.14, 0.3], [D2 * 16 * 1.26, 0.09, 0.28, 0.7], [D2 * 16, 0.1, 0.42, 0.5], [D2 * 24, 0.05, 0.56, 0.15]].forEach(([f, a, d, ang]) => {
-        const o = ctx.createOscillator(); o.frequency.value = f;
-        const g = ctx.createGain(); pluck(g.gain, T + 0.02 + d, a, 0.004, 0.7);
-        o.connect(g);
-        const a0 = ang * Math.PI * 2;
-        space(g, [[T + d, 0, 0.1, -0.6], [T + d + 1.2, Math.sin(a0) * 3, 0.4, -Math.cos(a0) * 3]], 0.6, 0.35);
-        o.start(T + d); o.stop(T + d + 5);
-      });
-      // Poussière scintillante qui retombe autour de la tête
-      for (let k = 0; k < 18; k++) {
-        const c = T + 0.1 + k * 0.06 + Math.random() * 0.03;
-        const g = ctx.createGain(); const src = noiseSrc(c, 0.05);
-        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 6000 + Math.random() * 5000; bp.Q.value = 4;
-        pluck(g.gain, c, 0.12 * (1 - k / 20), 0.001, 0.008);
-        src.connect(bp).connect(g);
-        const a = Math.random() * Math.PI * 2;
-        space(g, [[c, Math.sin(a) * 1.5, 0.6 + Math.random(), -Math.cos(a) * 1.5]], 0.5);
-      }
+      // 3. La traîne : grondement grave qui tourne lentement autour de vous en s'éteignant
+      const tail = noiseSrc(T, 4);
+      const tlp = ctx.createBiquadFilter(); tlp.type = "lowpass"; tlp.frequency.setValueAtTime(400, T); tlp.frequency.exponentialRampToValueAtTime(120, T + 3);
+      const gtl = ctx.createGain(); gtl.gain.setValueAtTime(0, T); gtl.gain.linearRampToValueAtTime(0.5, T + 0.1); gtl.gain.setTargetAtTime(0, T + 0.4, 0.9);
+      tail.connect(tlp).connect(gtl);
+      space(gtl, around(T, T + 3.5, 0, 1.0, 1.4, -0.1, 16), 0.3, 0.4);
 
-      // 5. Sortie : le logo glisse vers sa place, souffle qui passe derrière vers la gauche
+      // 4. Sortie : souffle grave qui passe derrière vers la gauche pendant que le logo se range
       const out2 = noiseSrc(t + 1.3, 1.0);
-      const obp = ctx.createBiquadFilter(); obp.type = "bandpass"; obp.Q.value = 1.2; obp.frequency.setValueAtTime(3000, t + 1.3); obp.frequency.exponentialRampToValueAtTime(500, t + 1.9);
-      const go = ctx.createGain(); go.gain.setValueAtTime(0, t + 1.3); go.gain.linearRampToValueAtTime(0.32, t + 1.62); go.gain.setTargetAtTime(0, t + 1.7, 0.12);
+      const obp = ctx.createBiquadFilter(); obp.type = "bandpass"; obp.Q.value = 1.0; obp.frequency.setValueAtTime(1600, t + 1.3); obp.frequency.exponentialRampToValueAtTime(260, t + 1.95);
+      const go = ctx.createGain(); go.gain.setValueAtTime(0, t + 1.3); go.gain.linearRampToValueAtTime(0.4, t + 1.62); go.gain.setTargetAtTime(0, t + 1.7, 0.14);
       out2.connect(obp).connect(go);
-      space(go, around(t + 1.3, t + 1.95, 0.1, -0.35, 1.3, 0.2, 8), 0.4);
+      space(go, around(t + 1.3, t + 1.95, 0.1, -0.35, 1.3, 0.1, 8), 0.4);
     },
 
     curtain(dur, at) {
