@@ -1,6 +1,7 @@
 // Écran de premier lancement : 4 étapes (mode, dossier des sons, logiciels, raccourcis).
 // Affiché une seule fois ; on peut le revoir depuis les Réglages.
 import type { Theme } from "./types";
+import { MOD } from "./api";
 
 export interface Accueil {
   step: number;              // 0 à 3
@@ -91,7 +92,7 @@ function stepBody(a: Accueil, theme: Theme, premiere: string): string {
       return `<h1>C'est prêt.</h1>
         <p class="lead">Trois gestes à retenir, et vous ne quitterez plus votre timeline.</p>
         <div class="ob-keys">
-          <div><span class="kbd">CTRL K</span><b>Chercher</b></div>
+          <div><span class="kbd">${MOD} K</span><b>Chercher</b></div>
           <div><span class="kbd">ESPACE</span><b>Écouter</b></div>
           <div><span class="kbd">GLISSER</span><b>Insérer</b></div>
         </div>

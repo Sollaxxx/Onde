@@ -1,0 +1,25 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Onde",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 380,
+        "minHeight": 560,
+        "decorations": true,
+        "dragDropEnabled": false,
+        "center": true,
+        "visible": false,
+        "backgroundColor": "#002FA7",
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 15
+        }
+      }
+    ]
+  }
+}

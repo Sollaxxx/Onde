@@ -4,7 +4,7 @@
 
 Onde est une application de bureau gratuite et open source pour les monteurs vidéo : on cherche un bruitage ou une musique libre de droits, on l'écoute, puis on le glisse directement dans la timeline de son logiciel de montage (Premiere Pro, DaVinci Resolve, CapCut, Avid…).
 
-> Onde est en **bêta**, sur Windows pour commencer. La version macOS viendra ensuite.
+> Onde est en **bêta**, sur Windows et sur Mac (Intel et Apple Silicon).
 
 ## Ce que fait Onde
 
@@ -15,13 +15,15 @@ Onde est une application de bureau gratuite et open source pour les monteurs vid
 - Chaque son utilisé est copié dans un dossier stable, rangé par catégorie (par défaut `Documents\Onde`, modifiable dans les réglages), pour que votre projet de montage ne le perde jamais.
 - Un mode clair, un mode sombre et un mode compact (petite fenêtre toujours au premier plan, pratique sur un deuxième écran).
 - Les **mises à jour automatiques** : Onde vous propose lui-même chaque nouvelle version.
-- Des raccourcis : `Ctrl K` chercher · `Espace` écouter · `↑ ↓` naviguer · `F` favori · `Échap` fermer.
+- Des raccourcis : `Ctrl K` (`⌘ K` sur Mac) chercher · `Espace` écouter · `↑ ↓` naviguer · `F` favori · `Échap` fermer.
 
 ## Installer
 
-Téléchargez `Onde_x.y.z_x64-setup.exe` sur la page [Releases](../../releases/latest), puis lancez-le.
+Tout se trouve sur la page [Releases](../../releases/latest).
 
-Tant qu'Onde n'est pas signé par un certificat commercial, Windows peut afficher un avertissement SmartScreen. Pour continuer, cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
+**Windows** : téléchargez `Onde_x.y.z_x64-setup.exe`, puis lancez-le. Tant qu'Onde n'est pas signé par un certificat commercial, Windows peut afficher un avertissement SmartScreen : cliquez sur **Informations complémentaires**, puis sur **Exécuter quand même**.
+
+**Mac** (Intel et Apple Silicon, macOS 11 ou plus récent) : téléchargez `Onde_x.y.z_universal.dmg`, ouvrez-le et glissez Onde dans Applications. Onde n'est pas encore signé par Apple : au premier lancement, macOS le bloque. Ouvrez **Réglages Système → Confidentialité et sécurité**, puis cliquez sur **Ouvrir quand même** en bas de la page. C'est à faire une seule fois.
 
 ## Compiler depuis les sources
 
