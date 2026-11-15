@@ -229,8 +229,12 @@ fn library_dir(app: AppHandle) -> Result<String, String> {
     Ok(library_root(&app)?.to_string_lossy().into_owned())
 }
 
+/// Site d'Onde : retours des testeurs, contributions de sons.
+const SITE: &str = "https://onde-nis.pages.dev";
 /// Adresse qui reçoit les retours des testeurs (fonction du site Onde).
 const FEEDBACK: &str = "https://onde-nis.pages.dev/api/retour";
+/// Taille maximale d'un son proposé par la communauté.
+const CONTRIB_MAX_BYTES: u64 = 60 * 1024 * 1024;
 
 /// Envoie un retour (bug, idée…) avec la version d'Onde et le système.
 #[tauri::command]
@@ -345,6 +349,70 @@ fn install_premiere_panel(app: AppHandle) -> Result<String, String> {
     Ok(panel_version(&dest).unwrap_or_default())
 }
 
+// ---------- Contributions de la communauté ----------
+
+/// Les contributions sont-elles ouvertes ? (interrupteur côté serveur ; fermé en cas de doute)
+#[tauri::command]
+async fn contributions_open() -> bool {
+    let Ok(client) = http() else { return false };
+    let Ok(res) = client.get(format!("{SITE}/api/config")).timeout(Duration::from_secs(6)).send().await else { return false };
+    let Ok(text) = res.text().await else { return false };
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v["contributions"].as_bool())
+        .unwrap_or(false)
+}
+
+/// Lit un fichier audio choisi par l'utilisateur (pré-écoute et analyse dans l'interface).
+#[tauri::command]
+fn read_audio(path: String) -> Result<tauri::ipc::Response, String> {
+    let meta = fs::metadata(&path).map_err(|e| format!("fichier illisible : {e}"))?;
+    if meta.len() > CONTRIB_MAX_BYTES {
+        return Err("fichier trop lourd (60 Mo au maximum)".into());
+    }
+    Ok(tauri::ipc::Response::new(fs::read(&path).map_err(err)?))
+}
+
+/// Envoie un son proposé. `meta` est du JSON déjà encodé pour une en-tête HTTP (encodeURIComponent).
+#[tauri::command]
+async fn send_contribution(app: AppHandle, path: String, meta: String) -> Result<String, String> {
+    let size = fs::metadata(&path).map_err(|e| format!("fichier illisible : {e}"))?.len();
+    if size > CONTRIB_MAX_BYTES {
+        return Err("fichier trop lourd (60 Mo au maximum)".into());
+    }
+    let bytes = fs::read(&path).map_err(err)?;
+    let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let res = http()?
+        .post(format!("{SITE}/api/contributions"))
+        .header("Content-Type", "application/octet-stream")
+        .header("X-Onde-Meta", meta)
+        .header("X-Onde-Fichier", urlencode(&name))
+        .header("X-Onde-Version", app.package_info().version.to_string())
+        .body(bytes)
+        .timeout(Duration::from_secs(300))
+        .send()
+        .await
+        .map_err(|_| "Pas de connexion au serveur Onde.".to_string())?;
+    let ok = res.status().is_success();
+    let text = res.text().await.unwrap_or_default();
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+    if ok {
+        Ok(v["id"].as_str().unwrap_or_default().to_string())
+    } else {
+        Err(v["error"].as_str().unwrap_or("Le son n'a pas pu être envoyé.").to_string())
+    }
+}
+
+/// Encodage minimal pour une en-tête HTTP (lettres, chiffres et quelques signes gardés tels quels).
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 /// Dossier proposé par défaut (Documents/Onde), affiché à l'écran d'accueil.
 #[tauri::command]
 fn default_library_dir(app: AppHandle) -> Result<String, String> {
@@ -428,7 +496,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

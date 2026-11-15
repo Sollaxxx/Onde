@@ -10,6 +10,8 @@ export interface Sound {
   license: string;
   peaks: number[];
   titleEn?: string;
+  /** Identifiant de la contribution d'origine (sons proposés par la communauté). */
+  contribution?: string;
   description?: string;
   descriptionEn?: string;
   ucs?: string;

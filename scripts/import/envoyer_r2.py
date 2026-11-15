@@ -64,6 +64,8 @@ def main() -> int:
     ap.add_argument("--bucket", default="onde-sons")
     ap.add_argument("--limite", type=int, default=0, help="n'envoyer que N sons (test)")
     ap.add_argument("--sans-catalogue", action="store_true")
+    ap.add_argument("--cdn", default="https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev",
+                    help="adresse publique de la bibliothèque (pour garder les sons de la communauté déjà publiés)")
     args = ap.parse_args()
 
     token = os.environ.get("CLOUDFLARE_API_TOKEN", "proxy-injected")
@@ -97,6 +99,18 @@ def main() -> int:
 
     if not args.sans_catalogue:
         published = [app_entry(s) for s in catalog if s["file"] in sent]
+        # Les sons publiés par la communauté (page de modération) ne sont pas dans ce dossier :
+        # on les reprend du catalogue en ligne pour ne jamais les effacer.
+        try:
+            with urllib.request.urlopen(f"{args.cdn}/catalogue/v1.json", timeout=60) as r:
+                online = json.loads(r.read().decode("utf-8"))
+            ids = {s["id"] for s in published}
+            community = [s for s in online.get("sounds", []) if s.get("contribution") and s["id"] not in ids]
+            published += community
+            print(f"{len(community)} sons de la communauté conservés", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"Catalogue en ligne illisible ({e}) : publication annulée pour ne pas perdre les contributions.", flush=True)
+            return 1
         doc = {"version": 1, "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "count": len(published), "sounds": published}
         put(base + "catalogue/v1.json", json.dumps(doc, ensure_ascii=False).encode("utf-8"), TYPES[".json"], token)
         print(f"Catalogue publié : {len(published)} sons", flush=True)

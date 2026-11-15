@@ -5,6 +5,7 @@ import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 import { introWanted, playIntro } from "./intro";
 import { playOutro } from "./outro";
+import { createContributions } from "./contribuer";
 
 // ---------- État ----------
 const store = {
@@ -31,7 +32,8 @@ const state = {
   paths: new Map<string, string>(),
   intOpen: false,
   update: null as UpdateInfo | null,
-  screen: "biblio" as "biblio" | "reglages" | "accueil",
+  screen: "biblio" as "biblio" | "reglages" | "accueil" | "contrib",
+  contribOpen: false, // contributions ouvertes par le serveur
   premiere: null as api.PanelStatus | null,
   installing: false,
   feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
@@ -114,7 +116,7 @@ function render(): void {
   root.innerHTML = `
     ${titlebar()}
     ${state.update ? updateBanner(state.update) : "<div></div>"}
-    ${state.screen === "reglages" ? settingsScreen() : `
+    ${state.screen === "reglages" ? settingsScreen() : state.screen === "contrib" ? contribScreen() : `
     <div class="body">
       ${sidebar()}
       ${mainList(list)}
@@ -123,6 +125,11 @@ function render(): void {
     ${cur ? minibar(cur) : ""}`}
     ${state.feedback ? feedbackDialog() : ""}`;
 
+  if (state.screen === "contrib" && focused?.startsWith("cb-")) {
+    const el = document.getElementById(focused) as HTMLInputElement | null;
+    el?.focus();
+    try { if (el && el.type !== "checkbox") el.setSelectionRange(el.value.length, el.value.length); } catch { /* liste déroulante */ }
+  }
   if (state.feedback && focused?.startsWith("fb-")) {
     const el = document.getElementById(focused) as HTMLInputElement | HTMLTextAreaElement | null;
     el?.focus();
@@ -233,6 +240,20 @@ function winButtons(): string {
         <button data-act="win-max" aria-label="Agrandir"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor"/></svg></button>
         <button data-act="win-close" class="close" aria-label="Fermer"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
       </div>`;
+}
+
+// ---------- Mes contributions ----------
+const contrib = createContributions({
+  catalog: () => state.catalog,
+  toast,
+  render: () => render(),
+  wave: waveSvg,
+  duration: formatDuration,
+});
+
+function contribScreen(): string {
+  const c = contrib.render();
+  return `<div class="body">${sidebar()}${c.main}${c.detail}</div>`;
 }
 
 // ---------- Envoyer un retour ----------
@@ -402,7 +423,8 @@ function sidebar(): string {
     cats.set(s.category, c);
   }
   return `<nav class="side" aria-label="Navigation">
-    <div class="nav">${views.map(([v, label, n]) => `<button data-view="${v}" aria-current="${state.view === v && !state.category}"><span>${label}</span><span class="mono">${n}</span></button>`).join("")}</div>
+    <div class="nav">${views.map(([v, label, n]) => `<button data-view="${v}" aria-current="${state.screen === "biblio" && state.view === v && !state.category}"><span>${label}</span><span class="mono">${n}</span></button>`).join("")}
+      ${state.contribOpen ? `<button data-act="contrib" aria-current="${state.screen === "contrib"}"><span>Mes contributions</span><span class="mono">+</span></button>` : ""}</div>
     <div class="nav"><p class="eyebrow">Catégories UCS</p>
       ${[...cats].sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([cat, { code }]) => `<button data-cat="${esc(cat)}" aria-current="${state.category === cat}"><span>${esc(cat)}</span><span class="mono">${code}</span></button>`).join("")}
     </div>
@@ -595,11 +617,13 @@ root.addEventListener("click", async (e) => {
   const catBtn = t.closest<HTMLElement>("[data-cat]");
 
   if (state.intOpen && !t.closest(".popover") && act !== "integrations") { state.intOpen = false; render(); }
-  if (view) { state.view = view; state.category = null; state.limit = 150; render(); return; }
-  if (catBtn) { state.category = catBtn.dataset.cat || null; state.limit = 150; render(); return; }
+  if (view) { if (state.screen === "contrib") { contrib.stop(); state.screen = "biblio"; } state.view = view; state.category = null; state.limit = 150; render(); return; }
+  if (catBtn) { if (state.screen === "contrib") { contrib.stop(); state.screen = "biblio"; } state.category = catBtn.dataset.cat || null; state.limit = 150; render(); return; }
 
   if (act?.startsWith("ob-")) { await accueilAction(act, t); return; }
   if (act?.startsWith("fb-")) { await feedbackAction(act, t); return; }
+  if (act?.startsWith("cb-")) { await contrib.action(act, t); return; }
+  if (act === "contrib") { state.screen = "contrib"; render(); return; }
   if (state.feedback) return;
 
   switch (act) {
@@ -663,6 +687,7 @@ root.addEventListener("dblclick", (e) => {
 root.addEventListener("input", (e) => {
   const t = e.target as HTMLInputElement;
   if (t.id === "q") { state.query = t.value; state.limit = 150; render(); }
+  if (t.id?.startsWith("cb-")) contrib.input(t);
   if (state.feedback && t.id === "fb-msg") state.feedback.message = t.value;
   if (state.feedback && t.id === "fb-mail") { state.feedback.email = t.value; store.set("onde.email", t.value); }
 });
@@ -695,6 +720,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (state.screen === "reglages") return;
+  if (state.screen === "contrib") { if (e.key === "Escape") { contrib.stop(); state.screen = "biblio"; render(); } return; }
   if (typing && !["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
   const list = visibleSounds();
   const i = list.findIndex((s) => s.id === state.selId);
@@ -753,6 +779,7 @@ async function start(): Promise<void> {
     void api.showWindow();
     if (!loaded) return;
   }
+  void api.contributionsOpen().then((open) => { state.contribOpen = open; if (open) render(); });
   state.update = await api.checkForUpdate();
   if (state.update) render();
 }

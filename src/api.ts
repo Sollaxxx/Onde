@@ -110,6 +110,56 @@ export async function installPremierePanel(): Promise<string> {
   throw new Error("l'installation se fait depuis l'application Onde");
 }
 
+// ---------- Contributions de la communauté ----------
+
+/** Les contributions sont-elles ouvertes ? (interrupteur côté serveur) */
+export async function contributionsOpen(): Promise<boolean> {
+  if (inTauri) return invoke<boolean>("contributions_open").catch(() => false);
+  return new URLSearchParams(location.search).has("contributions"); // pour tester l'interface dans un navigateur
+}
+
+// Hors de l'application (test de l'interface dans un navigateur) : fichiers choisis via le navigateur.
+const browserFiles = new Map<string, File>();
+
+/** Fenêtre de choix de fichiers audio. */
+export async function chooseAudioFiles(): Promise<string[]> {
+  if (!inTauri) {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file"; input.multiple = true; input.accept = "audio/*";
+      input.onchange = () => resolve([...(input.files ?? [])].map((f) => { browserFiles.set(f.name, f); return f.name; }));
+      input.click();
+    });
+  }
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({ multiple: true, title: "Choisir des sons à proposer", filters: [{ name: "Audio", extensions: ["wav", "flac", "mp3", "aif", "aiff", "ogg", "m4a"] }] });
+  return Array.isArray(picked) ? picked : picked ? [picked] : [];
+}
+
+/** Contenu d'un fichier audio local (pour la pré-écoute et l'analyse). */
+export async function readAudio(path: string): Promise<ArrayBuffer> {
+  if (!inTauri) { const f = browserFiles.get(path); if (!f) throw new Error("fichier introuvable"); return f.arrayBuffer(); }
+  return invoke<ArrayBuffer>("read_audio", { path });
+}
+
+export interface ContributionMeta {
+  title: string;
+  category: string;
+  code: string;
+  tags: string[];
+  description: string;
+  pseudo: string;
+  email: string;
+  license: "CC0";
+  durationMs: number;
+}
+
+/** Envoie un son proposé ; renvoie son identifiant de contribution. */
+export async function sendContribution(path: string, meta: ContributionMeta): Promise<string> {
+  if (!inTauri) throw new Error("L'envoi fonctionne dans l'application Onde.");
+  return invoke<string>("send_contribution", { path, meta: encodeURIComponent(JSON.stringify(meta)) });
+}
+
 export type FeedbackKind = "bug" | "idee" | "autre";
 
 /** Envoie un retour à l'équipe Onde (avec la version et le système). */
