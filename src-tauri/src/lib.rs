@@ -120,6 +120,15 @@ fn library_root(app: &AppHandle) -> Result<PathBuf, String> {
     }
 }
 
+/// Indique au panneau Premiere où se trouve la bibliothèque, pour que les deux partagent les mêmes fichiers.
+/// Fichier texte d'une ligne : <dossier de configuration d'Onde>/bibliotheque.txt
+fn write_library_hint(app: &AppHandle, dir: &Path) {
+    if let Ok(cfg) = app.path().app_config_dir() {
+        let _ = fs::create_dir_all(&cfg);
+        let _ = fs::write(cfg.join("bibliotheque.txt"), dir.to_string_lossy().as_bytes());
+    }
+}
+
 /// Autorise le lecteur audio de l'interface à lire les fichiers de ce dossier.
 fn allow_playback(app: &AppHandle, dir: &Path) {
     if let Err(e) = app.asset_protocol_scope().allow_directory(dir, true) {
@@ -144,6 +153,7 @@ fn set_library_dir(app: AppHandle, path: Option<String>) -> Result<String, Strin
     settings.library_dir = if dir == default { None } else { Some(dir.to_string_lossy().into_owned()) };
     save_settings(&app, &settings)?;
     allow_playback(&app, &dir);
+    write_library_hint(&app, &dir);
     Ok(dir.to_string_lossy().into_owned())
 }
 
@@ -251,6 +261,90 @@ async fn send_feedback(app: AppHandle, kind: String, message: String, email: Str
     Err(msg)
 }
 
+// ---------- Panneau Premiere Pro (CEP) ----------
+
+/// Identifiant du panneau, et nom de son dossier dans les extensions d'Adobe.
+const PREMIERE_PANEL: &str = "app.onde.premiere";
+
+/// Dossier des extensions CEP de l'utilisateur (Premiere 2019 et plus).
+fn cep_extensions_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    // Windows : %APPDATA%\Adobe\CEP\extensions ; macOS : ~/Library/Application Support/Adobe/CEP/extensions
+    Ok(app.path().data_dir().map_err(err)?.join("Adobe").join("CEP").join("extensions"))
+}
+
+/// Version d'un panneau, lue dans son manifeste (ExtensionBundleVersion="x.y.z").
+fn panel_version(dir: &Path) -> Option<String> {
+    let xml = fs::read_to_string(dir.join("CSXS").join("manifest.xml")).ok()?;
+    let start = xml.find("ExtensionBundleVersion=\"")? + "ExtensionBundleVersion=\"".len();
+    let len = xml[start..].find('"')?;
+    Some(xml[start..start + len].to_string())
+}
+
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Autorise Premiere à charger les panneaux non signés, pour l'utilisateur courant seulement.
+/// (Adobe documente des signatures refusées à tort depuis fin 2024 : c'est leur contournement officiel.)
+fn allow_unsigned_panels() {
+    for v in 9..=13 {
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("reg")
+                .args(["add", &format!("HKCU\\Software\\Adobe\\CSXS.{v}"), "/v", "PlayerDebugMode", "/t", "REG_SZ", "/d", "1", "/f"])
+                .creation_flags(0x0800_0000) // pas de fenêtre de console
+                .status();
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("defaults")
+                .args(["write", &format!("com.adobe.CSXS.{v}"), "PlayerDebugMode", "1"])
+                .status();
+        }
+        let _ = v;
+    }
+}
+
+#[derive(Serialize)]
+struct PanelStatus {
+    installed: Option<String>, // version installée
+    bundled: Option<String>,   // version fournie avec cette version d'Onde
+}
+
+#[tauri::command]
+fn premiere_status(app: AppHandle) -> Result<PanelStatus, String> {
+    let installed = panel_version(&cep_extensions_dir(&app)?.join(PREMIERE_PANEL));
+    let bundled = panel_version(&resource(&app, "premiere-cep")?);
+    Ok(PanelStatus { installed, bundled })
+}
+
+/// Installe (ou met à jour) le panneau Onde dans Premiere Pro.
+#[tauri::command]
+fn install_premiere_panel(app: AppHandle) -> Result<String, String> {
+    let src = resource(&app, "premiere-cep")?;
+    if !src.join("CSXS").join("manifest.xml").exists() {
+        return Err("le panneau n'est pas inclus dans cette version d'Onde".into());
+    }
+    let dest = cep_extensions_dir(&app)?.join(PREMIERE_PANEL);
+    if dest.exists() {
+        fs::remove_dir_all(&dest).map_err(|e| format!("ancien panneau impossible à remplacer ({e}). Fermez Premiere Pro et réessayez."))?;
+    }
+    copy_dir(&src, &dest).map_err(|e| format!("copie impossible : {e}"))?;
+    allow_unsigned_panels();
+    Ok(panel_version(&dest).unwrap_or_default())
+}
+
 /// Dossier proposé par défaut (Documents/Onde), affiché à l'écran d'accueil.
 #[tauri::command]
 fn default_library_dir(app: AppHandle) -> Result<String, String> {
@@ -316,6 +410,7 @@ pub fn run() {
             // Le dossier choisi dans les Réglages doit rester lisible par le lecteur audio.
             if let Ok(dir) = library_root(app.handle()) {
                 allow_playback(app.handle(), &dir);
+                write_library_hint(app.handle(), &dir);
             }
             // Le module de mise à jour ne doit jamais empêcher l'app de démarrer,
             // par exemple tant que la clé publique n'est pas encore configurée.
@@ -333,7 +428,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

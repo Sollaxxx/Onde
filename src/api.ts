@@ -97,6 +97,19 @@ export async function showWindow(): Promise<void> {
   await getCurrentWindow().show();
 }
 
+export interface PanelStatus { installed: string | null; bundled: string | null }
+
+/** Panneau Premiere : version installée et version fournie avec Onde. */
+export async function premiereStatus(): Promise<PanelStatus> {
+  return inTauri ? invoke<PanelStatus>("premiere_status") : { installed: null, bundled: "0.1.0" };
+}
+
+/** Installe (ou met à jour) le panneau Onde dans Premiere Pro et renvoie sa version. */
+export async function installPremierePanel(): Promise<string> {
+  if (inTauri) return invoke<string>("install_premiere_panel");
+  throw new Error("l'installation se fait depuis l'application Onde");
+}
+
 export type FeedbackKind = "bug" | "idee" | "autre";
 
 /** Envoie un retour à l'équipe Onde (avec la version et le système). */

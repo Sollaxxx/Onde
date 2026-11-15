@@ -4,6 +4,8 @@ name: Installateur Windows (test)
 # sans publier de version. Pour publier : « Publier une version ».
 on:
   workflow_dispatch:
+  # Vérifie aussi que chaque pull request compile sous Windows.
+  pull_request:
 
 jobs:
   windows:

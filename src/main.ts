@@ -4,6 +4,7 @@ import { formatDuration, normalize, search } from "./search";
 import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 import { introWanted, playIntro } from "./intro";
+import { playOutro } from "./outro";
 
 // ---------- État ----------
 const store = {
@@ -31,6 +32,8 @@ const state = {
   intOpen: false,
   update: null as UpdateInfo | null,
   screen: "biblio" as "biblio" | "reglages" | "accueil",
+  premiere: null as api.PanelStatus | null,
+  installing: false,
   feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
   accueil: { step: 0, defaultDir: "", customDir: null, useCustom: false } as Accueil,
   origin: "test" as Catalog["origin"],
@@ -104,7 +107,7 @@ function render(): void {
   const focused = document.activeElement?.id;
 
   if (state.screen === "accueil") {
-    root.innerHTML = accueilScreen(state.accueil, state.theme, ICON.word, winButtons());
+    root.innerHTML = accueilScreen(state.accueil, state.theme, ICON.word, winButtons(), premiereAction());
     return;
   }
 
@@ -305,16 +308,15 @@ async function finishAccueil(query = ""): Promise<void> {
     catch (e) { toast(`Dossier impossible à utiliser : ${e instanceof Error ? e.message : e}`); }
   }
   store.set("onde.accueil", 1);
-  state.screen = "biblio";
-  state.query = query;
-  state.view = "tout";
-  state.category = null;
-  render();
-  if (query) {
-    const first = visibleSounds()[0];
-    if (first) state.selId = first.id;
+  await playOutro(() => {
+    state.screen = "biblio";
+    state.query = query;
+    state.view = "tout";
+    state.category = null;
+    if (query) state.selId = visibleSounds()[0]?.id ?? state.selId;
     render();
-  } else document.getElementById("q")?.focus();
+  });
+  if (!query) document.getElementById("q")?.focus();
 }
 
 async function accueilAction(act: string, t: HTMLElement): Promise<void> {
@@ -340,9 +342,32 @@ async function accueilAction(act: string, t: HTMLElement): Promise<void> {
   document.querySelector<HTMLElement>(act === "ob-next" || act === "ob-back" ? ".ob-next" : `[data-act="${act}"]`)?.focus();
 }
 
+/** Bouton ou badge du panneau Premiere, selon ce qui est installé. */
+function premiereAction(): string {
+  const p = state.premiere;
+  if (state.installing) return `<button class="badge-btn" disabled>Installation…</button>`;
+  if (!p?.bundled) return `<span class="badge">BIENTÔT</span>`;
+  if (p.installed === p.bundled) return `<span class="badge on">INSTALLÉ</span>`;
+  return `<button class="badge-btn" data-act="install-premiere">${p.installed ? "Mettre à jour" : "Installer"}</button>`;
+}
+
+async function installPremiere(): Promise<void> {
+  state.installing = true;
+  render();
+  try {
+    const v = await api.installPremierePanel();
+    state.premiere = { installed: v, bundled: state.premiere?.bundled ?? v };
+    toast("Panneau installé. Redémarrez Premiere Pro, puis Fenêtre → Extensions → Onde.");
+  } catch (e) {
+    toast(`Installation impossible : ${e instanceof Error ? e.message : e}`);
+  }
+  state.installing = false;
+  render();
+}
+
 function integrations(): string {
+  const pr = `<div class="int"><span class="ini" aria-hidden="true">Pr</span><div class="meta"><b>Premiere Pro</b><span>Panneau Onde dans Premiere · 2019 et plus</span></div>${premiereAction()}</div>`;
   const rows = [
-    ["Pr", "Premiere Pro", "Panneau Onde intégré", "BIENTÔT", false],
     ["Dr", "DaVinci Resolve Studio", "Plugin intégré · version Studio", "BIENTÔT", false],
     ["Ae", "After Effects", "Panneau Onde", "BIENTÔT", false],
     ["Fc", "Final Cut Pro", "Avec la version macOS", "BIENTÔT", false],
@@ -350,6 +375,7 @@ function integrations(): string {
   ] as const;
   return `<div class="popover" role="dialog" aria-label="Intégrations logicielles">
     <header><h2>Intégrations logicielles</h2><p>Utilisez Onde directement dans votre logiciel de montage.</p></header>
+    ${pr}
     ${rows.map(([ini, name, info, badge, on]) => `<div class="int"><span class="ini" aria-hidden="true">${ini}</span><div class="meta"><b>${name}</b><span>${info}</span></div><span class="badge ${on ? "on" : ""}">${badge}</span></div>`).join("")}
   </div>`;
 }
@@ -589,6 +615,7 @@ root.addEventListener("click", async (e) => {
       try { await api.openFolder(state.libDir); } catch { toast("Le dossier sera créé au premier son utilisé."); }
       return;
     case "integrations": state.intOpen = !state.intOpen; render(); return;
+    case "install-premiere": await installPremiere(); return;
     case "theme": state.theme = state.theme === "sombre" ? "clair" : "sombre"; store.set("onde.theme", state.theme); render(); return;
     case "compact": state.compact = !state.compact; await api.setCompactWindow(state.compact); render(); return;
     case "win-min": return api.windowAction("minimize");
@@ -695,6 +722,7 @@ async function loadLibrary(): Promise<boolean> {
     state.catalog = cat.sounds;
     state.cdn = cat.cdn;
     state.origin = cat.origin;
+    state.premiere = await api.premiereStatus().catch(() => null);
     if (cat.origin === "cache") toast("Pas de connexion : bibliothèque enregistrée sur ce PC.");
   } catch (e) {
     root.innerHTML = `<p class="empty" style="padding:40px">Impossible de charger la bibliothèque : ${esc(String(e))}</p>`;
