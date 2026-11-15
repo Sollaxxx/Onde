@@ -94,6 +94,17 @@ export async function setLibraryDir(path: string | null): Promise<string> {
   return inTauri ? invoke<string>("set_library_dir", { path }) : path ?? "Documents\\Onde";
 }
 
+// ---------- Sons personnels ----------
+export interface UserSound {
+  path: string; root: string; dirs: string[]; bytes: number; modified: number;
+  durationMs: number | null; peaks: number[] | null; format: string | null;
+}
+export async function getUserDirs(): Promise<string[]> { return inTauri ? invoke<string[]>("get_user_dirs") : []; }
+export async function addUserDir(path: string): Promise<string[]> { return invoke<string[]>("add_user_dir", { path }); }
+export async function removeUserDir(path: string): Promise<string[]> { return invoke<string[]>("remove_user_dir", { path }); }
+export async function scanUserSounds(): Promise<UserSound[]> { return inTauri ? invoke<UserSound[]>("scan_user_sounds") : []; }
+export async function analyzeUserSounds(sounds: UserSound[]): Promise<UserSound[]> { return invoke<UserSound[]>("analyze_user_sounds", { sounds }); }
+
 /** Identifiants des sons déjà présents sur l'ordinateur (utilisables hors ligne). */
 export async function localSounds(): Promise<string[]> {
   return inTauri ? invoke<string[]>("local_sounds") : [];

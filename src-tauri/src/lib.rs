@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+mod perso;
+
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::path::BaseDirectory;
@@ -89,6 +91,8 @@ struct Settings {
     /// Nettoyage automatique : nombre de jours sans écoute avant d'effacer un son jamais glissé.
     /// Absent = 30 jours ; 0 = jamais.
     cleanup_days: Option<u32>,
+    /// Dossiers de sons personnels ajoutés à la bibliothèque
+    user_dirs: Option<Vec<String>>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -677,6 +681,8 @@ pub fn run() {
                 allow_playback(app.handle(), &dir);
                 write_library_hint(app.handle(), &dir);
             }
+            // Les dossiers de sons personnels doivent rester lisibles par le lecteur audio
+            perso::allow_all(app.handle());
             // Nettoyage automatique au démarrage, en arrière-plan (ne retarde jamais l'ouverture).
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -705,7 +711,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

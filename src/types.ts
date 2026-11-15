@@ -20,6 +20,15 @@ export interface Sound {
   source?: string;
   sourceUrl?: string;
   bytes?: number;
+  /** Son personnel : chemin du fichier sur l'ordinateur (pas de téléchargement). */
+  local?: string;
+}
+
+/** Playlist de l'utilisateur : sons de la banque et sons personnels, dans l'ordre d'ajout. */
+export interface Playlist {
+  id: string;
+  name: string;
+  ids: string[];
 }
 
 /** « en ligne » : bibliothèque Cloudflare ; « cache » : dernière copie hors ligne ; « test » : sons de test. */
@@ -30,7 +39,7 @@ export interface Catalog {
 }
 
 export type Theme = "clair" | "sombre" | "systeme";
-export type View = "tout" | "favoris" | "recents";
+export type View = "tout" | "favoris" | "recents" | "perso" | "playlist";
 
 export interface UpdateInfo {
   version: string;

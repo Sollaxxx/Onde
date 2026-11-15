@@ -2,6 +2,16 @@
 
 Chaque version commence par une phrase de résumé : c'est elle qui s'affiche dans le bandeau de mise à jour.
 
+## 0.4.0
+
+Vos propres sons dans Onde, des playlists et une navigation plus claire.
+
+### Nouveautés
+- **Vos propres sons** : ajoutez vos dossiers dans Réglages → Dossier des sons → Mes sons. Ils apparaissent dans « Mes sons », dans la recherche et dans les playlists, à côté de la banque. Formats lus : WAV, AIFF, MP3, FLAC, OGG, M4A, CAF. Les fichiers restent où ils sont : Onde ne les copie, ne les déplace et ne les efface jamais.
+- **Playlists** : dans la rubrique Favoris, « Titres likés » et vos playlists (« Biblio n°01 », « Biblio n°02 »… renommables). On y met des sons de la banque comme vos sons à vous, avec « Ajouter à une playlist » dans le panneau de droite.
+- **Une étoile sur chaque son** de la liste, pour liker sans quitter la liste.
+- **Catégories rangées** : la liste des catégories se replie dans la barre de gauche, et un menu déroulant remplace la rangée de boutons au-dessus des résultats.
+
 ## 0.3.2
 
 Mode hors ligne, nettoyage automatique des sons et plusieurs corrections.
