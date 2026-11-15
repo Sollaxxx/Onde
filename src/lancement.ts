@@ -48,7 +48,8 @@ function timeline(): string {
 export async function playLaunch(ready: Promise<void>, mode: LaunchMode): Promise<void> {
   const host = document.createElement("div");
   host.className = "launch";
-  host.innerHTML = `<div class="ln-stage"><div class="ln-logo">${ICON}${WORD}</div><div class="ln-rings"></div>${timeline()}</div>`;
+  // La scène reste cachée tant que le son n'est pas prêt : rien ne doit apparaître avant son tour.
+  host.innerHTML = `<div class="ln-stage" style="visibility:hidden"><div class="ln-logo">${ICON}${WORD}</div><div class="ln-rings"></div>${timeline()}</div>`;
   document.body.appendChild(host);
   const $ = <T extends Element>(s: string) => host.querySelector<T>(s)!;
   const $$ = <T extends Element>(s: string) => [...host.querySelectorAll<T>(s)];
@@ -59,6 +60,8 @@ export async function playLaunch(ready: Promise<void>, mode: LaunchMode): Promis
   host.addEventListener("pointerdown", () => { skipped = true; audio?.sound.stop(); host.getAnimations({ subtree: true }).forEach((a) => a.finish()); });
   const fill = { fill: "both" as FillMode };
   if (audio && !skipped) audio.sound.launch();
+  // Toutes les animations ci-dessous sont créées dans la même tâche : la scène s'affiche directement dans son état de départ.
+  $<HTMLElement>(".ln-stage").style.visibility = "";
 
   // 1. La ligne de temps se déroule depuis le centre
   $<HTMLElement>(".ln-line").animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], { duration: 520, easing: EASE, ...fill });
@@ -95,7 +98,8 @@ export async function playLaunch(ready: Promise<void>, mode: LaunchMode): Promis
       const r = document.createElement("span");
       r.style.left = `${cx}px`; r.style.top = `${cy}px`;
       rings.appendChild(r);
-      r.animate([{ transform: "translate(-50%, -50%) scale(.15)", opacity: 0.9 }, { transform: "translate(-50%, -50%) scale(1)", opacity: 0 }],
+      // Invisible avant son tour, apparaît en fondu, puis s'efface en s'élargissant
+      r.animate([{ transform: "translate(-50%, -50%) scale(.15)", opacity: 0 }, { transform: "translate(-50%, -50%) scale(.27)", opacity: 0.9, offset: 0.14 }, { transform: "translate(-50%, -50%) scale(1)", opacity: 0 }],
         { duration: 900, delay: delay + k * 140, easing: "cubic-bezier(0.2, 0.6, 0.3, 1)", fill: "both" }).onfinish = () => r.remove();
     }
   };

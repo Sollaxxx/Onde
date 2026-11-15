@@ -69,6 +69,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   document.body.insertAdjacentHTML("beforeend", markup());
   const host = document.querySelector<HTMLElement>(".intro")!;
   const svg = host.querySelector<SVGSVGElement>(".intro-svg")!;
+  svg.style.visibility = "hidden"; // rien ne doit apparaître avant que les positions de départ soient posées
   const q = <T extends Element>(s: string) => svg.querySelector<T>(s)!;
   const qa = (s: string) => [...svg.querySelectorAll<SVGElement>(s)];
 
@@ -93,6 +94,8 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   head.style.opacity = "0";
   stem.style.transform = `translate(0px, 19.4px) scale(4.6, 0)`;
   for (const g of qa(".i-ticks, .i-clips > rect, .i-band, .ib")) g.style.opacity = "0";
+  for (const st of strokes) st.style.strokeDasharray = "1", st.style.strokeDashoffset = "1";
+  svg.style.visibility = "";
 
   // 1. Le mot se dessine
   sfx((s) => s.strokes());
