@@ -5,6 +5,7 @@ import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
 import { accueilScreen, STEPS, type Accueil } from "./bienvenue";
 import { introWanted, playIntro } from "./intro";
 import { playOutro } from "./outro";
+import { launchWanted, playLaunch, type LaunchMode } from "./lancement";
 import { createContributions } from "./contribuer";
 
 // ---------- État ----------
@@ -34,6 +35,8 @@ const state = {
   update: null as UpdateInfo | null,
   screen: "biblio" as "biblio" | "reglages" | "accueil" | "contrib",
   contribOpen: false, // contributions ouvertes par le serveur
+  // Animation de lancement : "son" (par défaut), "muet" ou "off" (l'ancien réglage true/false est repris)
+  launchAnim: ((v: unknown): LaunchMode => (v === false || v === "off" ? "off" : v === "muet" ? "muet" : "son"))(store.get<unknown>("onde.animDemarrage", "son")),
   premiere: null as api.PanelStatus | null,
   installing: false,
   feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
@@ -76,7 +79,7 @@ const ICON = {
   gear: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
   chat: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h16v12H9l-5 4z"/></svg>`,
   logo: `<svg width="20" height="20" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#002FA7"/><rect x="12" y="34" width="96" height="58" fill="#FFFFFF"/><g fill="#002FA7"><rect x="22" y="50" width="12" height="26"/><rect x="40" y="42" width="12" height="42"/><rect x="76" y="46" width="12" height="34"/></g><polygon points="50,4 78,4 78,20 64,32 50,20" fill="#E2231A"/><rect x="58" y="26" width="12" height="84" fill="#E2231A"/></svg>`,
-  word: `<svg width="52" height="20" viewBox="0 0 256 100" role="img" aria-label="Onde"><g fill="none" stroke="currentColor" stroke-width="13"><circle cx="28" cy="52" r="21.5"/><path d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/><circle cx="160" cy="52" r="21.5"/><path d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/><path d="M204.5 52H247.5"/></g><polygon points="169,0 194,0 194,10 181.5,20 169,10" fill="#E2231A"/><rect x="175" y="14" width="13" height="66" fill="#E2231A"/></svg>`,
+  word: `<svg width="52" height="20" viewBox="0 0 256 100" role="img" aria-label="Onde"><g fill="none" stroke="currentColor" stroke-width="13"><circle cx="28" cy="52" r="21.5"/><path d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/><circle cx="160" cy="52" r="21.5"/><path d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/><path d="M204.5 52H254"/></g><polygon points="169,0 194,0 194,10 181.5,20 169,10" fill="#E2231A"/><rect x="175" y="14" width="13" height="66" fill="#E2231A"/></svg>`,
 };
 
 function toast(msg: string): void {
@@ -176,6 +179,12 @@ function settingsScreen(): string {
           <div><b>Mode</b><span>Le mode sombre est plus doux en salle de montage.</span></div>
           <div class="segmented" role="radiogroup" aria-label="Mode d'affichage">
             ${themes.map(([v, label]) => `<button role="radio" data-act="theme-set" data-value="${v}" aria-checked="${state.theme === v}">${label}</button>`).join("")}
+          </div>
+        </div>
+        <div class="set-row">
+          <div><b>Animation au démarrage</b><span>L'animation du logo à chaque ouverture d'Onde.</span></div>
+          <div class="segmented" role="radiogroup" aria-label="Animation au démarrage">
+            ${([["son", "Avec le son"], ["muet", "Sans le son"], ["off", "Désactivée"]] as const).map(([v, l]) => `<button role="radio" data-act="launch-set" data-value="${v}" aria-checked="${state.launchAnim === v}">${l}</button>`).join("")}
           </div>
         </div>
       </section>
@@ -652,6 +661,7 @@ root.addEventListener("click", async (e) => {
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
+    case "launch-set": state.launchAnim = t.closest<HTMLElement>("[data-value]")!.dataset.value as LaunchMode; store.set("onde.animDemarrage", state.launchAnim); render(); return;
     case "replay-accueil": {
       if (!introWanted()) { await openAccueil(); return; }
       await playIntro(openAccueil().then(nextFrame));
@@ -773,6 +783,15 @@ async function start(): Promise<void> {
     await nextFrame();
     void api.showWindow();
     await intro;
+    if (!ok) return;
+  } else if (!firstRun && launchWanted(state.launchAnim)) {
+    // Lancements suivants : petite animation du logo pendant que la bibliothèque charge.
+    let ok = true;
+    const ready = loadLibrary().then(async (loaded) => { ok = loaded; if (loaded) render(); await nextFrame(); });
+    const anim = playLaunch(ready, state.launchAnim);
+    await nextFrame();
+    void api.showWindow();
+    await anim;
     if (!ok) return;
   } else {
     const loaded = await loadLibrary();

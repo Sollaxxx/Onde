@@ -18,6 +18,8 @@ export interface IntroSound {
   clip(at?: number): void;
   rewind(dur: number, at?: number): void;
   resolve(at?: number): void;
+  /** Animation de lancement (≈ 2 s) : la ligne de temps, le tracé, le tic, les ondes, la sortie. */
+  launch(at?: number): void;
   /** Passage vers l'application : le rideau bleu se ferme. */
   curtain(dur: number, at?: number): void;
   /** Passage vers l'application : la tête de lecture balaie l'écran de gauche à droite. */
@@ -46,7 +48,11 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
   limiter.release.value = 0.15;
   const master = ctx.createGain();
   master.gain.value = volume;
-  glue.connect(limiter).connect(master).connect(ctx.destination);
+  // « drive » : gain avant le limiteur (1 par défaut ; poussé pour l'animation de lancement)
+  const drive = ctx.createGain();
+  // « soft » : écrêtage doux en sortie (transparent par défaut ; arrondit les crêtes quand on pousse le niveau)
+  const soft = ctx.createWaveShaper();
+  glue.connect(drive).connect(limiter).connect(master).connect(soft).connect(ctx.destination);
 
   const reverb = ctx.createConvolver();
   reverb.buffer = impulse(ctx, 3.2, 2.4);
@@ -418,6 +424,192 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
         b.start(t + 0.04);
         b.stop(t + 4);
       }
+    },
+
+    launch(at) {
+      const t = now(at);
+      const T = t + 0.8; // la tête de lecture tombe dans le « d »
+      // Plus fort : on pousse le niveau dans le limiteur (le son devient plus dense sans saturer)
+      drive.gain.value = 2.6;
+      limiter.threshold.value = -4;
+      master.gain.value = 1.15;
+      { const n = 2048, c = new Float32Array(n), k = 1.6; for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = (Math.tanh(k * x) / Math.tanh(k)) * 0.93; } soft.curve = c; soft.oversample = "4x"; }
+
+      // Grande salle : réverbération longue pour que l'impact résonne
+      const hall = ctx.createConvolver();
+      hall.buffer = impulse(ctx, 4.5, 2.2);
+      const hallWet = ctx.createGain();
+      hallWet.gain.value = 0.42;
+      hall.connect(hallWet).connect(glue);
+
+      /** Son placé dans l'espace autour de la tête (binaural HRTF) ; points : [instant, x, y, z]. */
+      const space = (node: AudioNode, pts: [number, number, number, number][], send = 0.3, hallSend = 0): void => {
+        const p = ctx.createPanner();
+        p.panningModel = "HRTF";
+        p.distanceModel = "inverse";
+        p.refDistance = 1;
+        p.rolloffFactor = 0.6;
+        const [t0, x0, y0, z0] = pts[0];
+        p.positionX.setValueAtTime(x0, t0); p.positionY.setValueAtTime(y0, t0); p.positionZ.setValueAtTime(z0, t0);
+        for (const [tt, x, y, z] of pts.slice(1)) { p.positionX.linearRampToValueAtTime(x, tt); p.positionY.linearRampToValueAtTime(y, tt); p.positionZ.linearRampToValueAtTime(z, tt); }
+        node.connect(p).connect(glue);
+        if (send) { const g = ctx.createGain(); g.gain.value = send; p.connect(g).connect(reverb); }
+        if (hallSend) { const g = ctx.createGain(); g.gain.value = hallSend; p.connect(g).connect(hall); }
+      };
+      /** Positions sur un cercle autour de l'auditeur (angle en tours : 0 devant, 0,25 à droite, 0,5 derrière). */
+      const around = (t0: number, t1: number, a0: number, a1: number, r = 1.4, y = 0, steps = 10): [number, number, number, number][] =>
+        Array.from({ length: steps + 1 }, (_, k) => {
+          const u = k / steps, a = (a0 + (a1 - a0) * u) * Math.PI * 2;
+          return [t0 + (t1 - t0) * u, Math.sin(a) * r, y, -Math.cos(a) * r] as [number, number, number, number];
+        });
+
+      // 1. La montée, façon riser (0 → 0,8 s)
+      // Sous-grave qui gonfle jusqu'à l'impact
+      const sub = ctx.createOscillator();
+      sub.frequency.setValueAtTime(D2 / 2, t);
+      sub.frequency.exponentialRampToValueAtTime(D2 / 2 * 1.25, T);
+      const gs = ctx.createGain();
+      gs.gain.setValueAtTime(0, t);
+      gs.gain.linearRampToValueAtTime(0.8, T - 0.03);
+      gs.gain.linearRampToValueAtTime(0.0, T + 0.01);
+      sub.connect(gs); gs.connect(glue);
+      sub.start(t); sub.stop(T + 0.1);
+      // Riser de souffle qui monte du grave à l'aigu en passant d'une oreille à l'autre, de plus en plus vite
+      const pingpong: [number, number, number, number][] = [];
+      for (let u = 0, side = -1; u <= 1.0001; side = -side) {
+        pingpong.push([t + u * (T - t), side * 1.6, 0.2 + u * 0.6, -0.3]);
+        u += Math.max(0.035, 0.22 * (1 - u) ** 1.4);
+      }
+      const rz = noiseSrc(t, 1.0);
+      const rbp = ctx.createBiquadFilter(); rbp.type = "bandpass"; rbp.Q.value = 1.4;
+      rbp.frequency.setValueAtTime(220, t); rbp.frequency.exponentialRampToValueAtTime(8000, T);
+      const grz = ctx.createGain(); grz.gain.setValueAtTime(0.001, t); grz.gain.exponentialRampToValueAtTime(0.6, T - 0.02); grz.gain.linearRampToValueAtTime(0, T + 0.005);
+      rz.connect(rbp).connect(grz);
+      space(grz, pingpong, 0.35);
+      // Riser tonal : nappes graves qui glissent d'une octave pendant que le filtre s'ouvre (tension, pas mélodie)
+      const rlp2 = ctx.createBiquadFilter(); rlp2.type = "lowpass"; rlp2.Q.value = 3;
+      rlp2.frequency.setValueAtTime(140, t); rlp2.frequency.exponentialRampToValueAtTime(3200, T);
+      const gtr = ctx.createGain(); gtr.gain.setValueAtTime(0.001, t); gtr.gain.exponentialRampToValueAtTime(0.3, T - 0.02); gtr.gain.linearRampToValueAtTime(0, T + 0.005);
+      rlp2.connect(gtr);
+      const trSplit = ctx.createGain(); gtr.connect(trSplit); trSplit.connect(glue);
+      const trRev = ctx.createGain(); trRev.gain.value = 0.35; trSplit.connect(trRev).connect(reverb);
+      [[D2, -8, -1.4], [D2, 9, 1.4], [D2 * 1.5, -5, -0.7], [D2 * 1.5, 6, 0.7], [D2 * 2, 0, 0]].forEach(([f, det, x]) => {
+        const o = ctx.createOscillator(); o.type = "sawtooth";
+        o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 2, T);
+        o.detune.value = det;
+        const g = ctx.createGain(); g.gain.value = 0.22;
+        const p = ctx.createPanner(); p.panningModel = "HRTF"; p.positionX.value = x; p.positionY.value = 0.1; p.positionZ.value = -0.8;
+        o.connect(g).connect(p).connect(rlp2);
+        o.start(t); o.stop(T + 0.05);
+      });
+      // Pulsations graves qui accélèrent, une oreille puis l'autre
+      for (let c = t + 0.06, k = 0; c < T - 0.04; k++) {
+        const o = ctx.createOscillator();
+        o.frequency.setValueAtTime(120, c); o.frequency.exponentialRampToValueAtTime(48, c + 0.08);
+        const g = ctx.createGain(); pluck(g.gain, c, 0.35 + k * 0.03, 0.002, 0.05);
+        o.connect(g);
+        space(g, [[c, k % 2 ? 1.5 : -1.5, 0, -0.4]], 0.15);
+        o.start(c); o.stop(c + 0.3);
+        c += Math.max(0.055, 0.2 - k * 0.028);
+      }
+      // Le tracé du logo : frottements feutrés sur les côtés
+      [[0.16, -1, 0.2, -0.6], [0.28, 1, 0.2, -0.6], [0.4, -0.6, 0.8, -0.6], [0.52, 0.6, 0.8, -0.6]].forEach(([o, x, y, z], i) => {
+        const src = noiseSrc(t + o, 0.5);
+        const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.2;
+        bp.frequency.setValueAtTime(1200 + i * 150, t + o); bp.frequency.exponentialRampToValueAtTime(2600 + i * 150, t + o + 0.3);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0, t + o); g.gain.linearRampToValueAtTime(0.2, t + o + 0.04); g.gain.setTargetAtTime(0, t + o + 0.07, 0.08);
+        src.connect(bp).connect(g);
+        space(g, [[t + o, x, y, z]], 0.3);
+      });
+
+      // 2. L'impact « BRAAM » : un mur de basses tout autour de la tête
+      // Sous-grave qui plonge dans l'infra
+      const drop = ctx.createOscillator();
+      drop.frequency.setValueAtTime(70, T); drop.frequency.exponentialRampToValueAtTime(24, T + 2.2);
+      const gd = ctx.createGain(); pluck(gd.gain, T, 1.0, 0.006, 0.9);
+      drop.connect(gd); gd.connect(glue);
+      const dh = ctx.createGain(); dh.gain.value = 0.2; gd.connect(dh).connect(hall);
+      drop.start(T); drop.stop(T + 6);
+      // Le « braam » : dents de scie très graves (ré et la, sans mélodie), filtre qui s'ouvre puis se referme,
+      // chaque voix placée dans une direction différente autour de l'auditeur
+      const braamLP = ctx.createBiquadFilter(); braamLP.type = "lowpass"; braamLP.Q.value = 2.5;
+      braamLP.frequency.setValueAtTime(90, T);
+      braamLP.frequency.exponentialRampToValueAtTime(1100, T + 0.12);
+      braamLP.frequency.exponentialRampToValueAtTime(260, T + 1.4);
+      braamLP.frequency.exponentialRampToValueAtTime(90, T + 3.2);
+      const braamSat = ctx.createWaveShaper();
+      const curve = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) { const v = i / 511.5 - 1; curve[i] = Math.tanh(v * 2.6) / Math.tanh(2.6); }
+      braamSat.curve = curve;
+      const gb = ctx.createGain(); gb.gain.setValueAtTime(0, T); gb.gain.linearRampToValueAtTime(0.42, T + 0.04); gb.gain.setTargetAtTime(0, T + 0.25, 0.9);
+      braamLP.connect(braamSat).connect(gb);
+      const bsplit = ctx.createGain(); gb.connect(bsplit);
+      bsplit.connect(glue);
+      const bh = ctx.createGain(); bh.gain.value = 0.5; bsplit.connect(bh).connect(hall);
+      [[D2 / 2, -6, -1.2, 0, -0.4], [D2 / 2, 7, 1.2, 0, -0.4], [D2, -9, -0.8, 0.2, 1.0], [D2, 10, 0.8, 0.2, 1.0], [D2 * 1.5, -4, 0, 0.6, -1.0], [D2 * 1.5, 5, 0, -0.4, 1.2]].forEach(([f, det, x, y, z]) => {
+        const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; o.detune.value = det;
+        const g = ctx.createGain(); g.gain.value = 0.3;
+        o.connect(g);
+        const p = ctx.createPanner(); p.panningModel = "HRTF"; p.distanceModel = "inverse"; p.refDistance = 1; p.rolloffFactor = 0.4;
+        p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z;
+        g.connect(p).connect(braamLP);
+        o.start(T); o.stop(T + 5);
+      });
+      // Boom saturé et coup de pression : l'impact pèse plus lourd
+      const boomO = ctx.createOscillator();
+      boomO.frequency.setValueAtTime(110, T); boomO.frequency.exponentialRampToValueAtTime(32, T + 0.5);
+      const boomSat = ctx.createWaveShaper(); boomSat.curve = curve;
+      const gbo = ctx.createGain(); pluck(gbo.gain, T, 0.75, 0.003, 0.35);
+      boomO.connect(boomSat).connect(gbo); gbo.connect(glue);
+      const boh = ctx.createGain(); boh.gain.value = 0.45; gbo.connect(boh).connect(hall);
+      boomO.start(T); boomO.stop(T + 2.5);
+      const press = noiseSrc(T, 0.6);
+      const plp = ctx.createBiquadFilter(); plp.type = "lowpass"; plp.frequency.setValueAtTime(600, T); plp.frequency.exponentialRampToValueAtTime(80, T + 0.4);
+      const gp = ctx.createGain(); pluck(gp.gain, T, 0.9, 0.002, 0.12);
+      press.connect(plp).connect(gp); space(gp, [[T, -1.2, 0, 0.3], [T + 0.4, 1.2, 0, 0.3]], 0.2, 0.5);
+      // Coup sec et grave au centre
+      const thump = ctx.createOscillator();
+      thump.frequency.setValueAtTime(160, T); thump.frequency.exponentialRampToValueAtTime(42, T + 0.14);
+      const gth = ctx.createGain(); pluck(gth.gain, T, 0.9, 0.002, 0.09);
+      thump.connect(gth); space(gth, [[T, 0, 0, -0.8]], 0.2, 0.5);
+      thump.start(T); thump.stop(T + 0.8);
+      const crack = noiseSrc(T, 0.5);
+      const clp = ctx.createBiquadFilter(); clp.type = "lowpass"; clp.frequency.value = 2200;
+      const gc = ctx.createGain(); pluck(gc.gain, T, 0.6, 0.0008, 0.05);
+      crack.connect(clp).connect(gc); space(gc, [[T, 0, 0.1, -0.9]], 0.3, 0.7);
+
+      // 3. La traîne : deux grondements qui tournent autour de la tête en sens inverse,
+      //    et une descente qui traverse de droite à gauche en s'éteignant
+      [[0, 1], [0.5, -0.5]].forEach(([a0, a1], i) => {
+        const n = noiseSrc(T, 4);
+        const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(500, T); lp.frequency.exponentialRampToValueAtTime(110, T + 3);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0, T); g.gain.linearRampToValueAtTime(i ? 0.25 : 0.7, T + 0.12); g.gain.setTargetAtTime(0, T + 0.5, 0.95);
+        n.connect(lp).connect(g);
+        space(g, around(T, T + 3.5, a0, a1, 1.6, i ? 0.4 : -0.2, 18), 0.15, 0.25);
+      });
+      // Souffle qui tourbillonne d'une oreille à l'autre après l'impact (une fois et demie)
+      const swirl = noiseSrc(T + 0.05, 2.4);
+      const swbp = ctx.createBiquadFilter(); swbp.type = "bandpass"; swbp.Q.value = 0.9;
+      swbp.frequency.setValueAtTime(1400, T + 0.05); swbp.frequency.exponentialRampToValueAtTime(350, T + 2.3);
+      const gsw = ctx.createGain(); gsw.gain.setValueAtTime(0, T + 0.05); gsw.gain.linearRampToValueAtTime(0.85, T + 0.3); gsw.gain.setTargetAtTime(0, T + 0.9, 0.45);
+      const swp = ctx.createStereoPanner();
+      const turns = new Float32Array(64);
+      for (let k = 0; k < 64; k++) turns[k] = Math.sin((k / 63) * Math.PI * 3) * 0.95;
+      swp.pan.setValueCurveAtTime(turns, T + 0.05, 2.2);
+      swirl.connect(swbp).connect(gsw).connect(swp).connect(glue);
+      const swr = ctx.createGain(); swr.gain.value = 0.2; swp.connect(swr).connect(reverb);
+      const down = noiseSrc(T + 0.1, 1.6);
+      const dbp = ctx.createBiquadFilter(); dbp.type = "bandpass"; dbp.Q.value = 1.3; dbp.frequency.setValueAtTime(5000, T + 0.1); dbp.frequency.exponentialRampToValueAtTime(180, T + 1.6);
+      const gdn = ctx.createGain(); gdn.gain.setValueAtTime(0, T + 0.1); gdn.gain.linearRampToValueAtTime(0.75, T + 0.25); gdn.gain.setTargetAtTime(0, T + 0.6, 0.35);
+      down.connect(dbp).connect(gdn);
+      space(gdn, [[T + 0.1, 2.2, 0.6, -0.3], [T + 0.8, 0, 0.2, 1.2], [T + 1.6, -2.2, -0.2, -0.3]], 0.2, 0.15);
+
+      // 4. Sortie : souffle grave qui passe derrière vers la gauche pendant que le logo se range
+      const out2 = noiseSrc(t + 1.3, 1.0);
+      const obp = ctx.createBiquadFilter(); obp.type = "bandpass"; obp.Q.value = 1.0; obp.frequency.setValueAtTime(1600, t + 1.3); obp.frequency.exponentialRampToValueAtTime(260, t + 1.95);
+      const go = ctx.createGain(); go.gain.setValueAtTime(0, t + 1.3); go.gain.linearRampToValueAtTime(0.4, t + 1.62); go.gain.setTargetAtTime(0, t + 1.7, 0.14);
+      out2.connect(obp).connect(go);
+      space(go, around(t + 1.3, t + 1.95, 0.1, -0.35, 1.3, 0.1, 8), 0.4);
     },
 
     curtain(dur, at) {

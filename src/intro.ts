@@ -44,7 +44,7 @@ function markup(): string {
         <path pathLength="1" d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/>
         <circle pathLength="1" cx="160" cy="52" r="21.5"/>
         <path pathLength="1" d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/>
-        <path pathLength="1" d="M204.5 52H247.5"/>
+        <path pathLength="1" d="M204.5 52H254"/>
       </g>
       <g class="i-ph" fill="#E2231A">
         <polygon class="i-head" points="-4.4,0 4.4,0 4.4,3.5 0,7 -4.4,3.5"/>
@@ -69,6 +69,7 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   document.body.insertAdjacentHTML("beforeend", markup());
   const host = document.querySelector<HTMLElement>(".intro")!;
   const svg = host.querySelector<SVGSVGElement>(".intro-svg")!;
+  svg.style.visibility = "hidden"; // rien ne doit apparaître avant que les positions de départ soient posées
   const q = <T extends Element>(s: string) => svg.querySelector<T>(s)!;
   const qa = (s: string) => [...svg.querySelectorAll<SVGElement>(s)];
 
@@ -93,12 +94,19 @@ export async function playIntro(ready: Promise<void>): Promise<void> {
   head.style.opacity = "0";
   stem.style.transform = `translate(0px, 19.4px) scale(4.6, 0)`;
   for (const g of qa(".i-ticks, .i-clips > rect, .i-band, .ib")) g.style.opacity = "0";
+  for (const st of strokes) st.style.strokeDasharray = "1", st.style.strokeDashoffset = "1", st.style.opacity = "0";
+  svg.style.visibility = "";
 
   // 1. Le mot se dessine
   sfx((s) => s.strokes());
   strokes.forEach((s, i) => {
-    s.style.strokeDasharray = "1";
-    s.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: 750, delay: 120 + i * 110, easing: EASE, ...fill });
+    // Invisible avant son tour (pas de point parasite), puis trait plein à la fin (lettre bien refermée)
+    s.animate([
+      { strokeDashoffset: 1, opacity: 0 },
+      { strokeDashoffset: 0.97, opacity: 1, offset: 0.03 },
+      { strokeDashoffset: 0, opacity: 1, strokeDasharray: "1", offset: 0.98 },
+      { strokeDashoffset: 0, opacity: 1, strokeDasharray: "none" },
+    ], { duration: 750, delay: 120 + i * 110, easing: EASE, ...fill });
   });
 
   // 2. La tête de lecture tombe dans le « d »
