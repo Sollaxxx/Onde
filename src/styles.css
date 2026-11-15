@@ -202,7 +202,7 @@ button { cursor: pointer; }
 .secondary.strong { border-color: var(--ink); font-weight: 600; }
 .secondary:hover { border-color: var(--ink); }
 .segmented { display: flex; border: 1px solid var(--line-strong); }
-.segmented button { min-height: 38px; padding: 0 16px; border: 0; background: transparent; color: var(--ink-2); }
+.segmented button { min-height: 38px; padding: 0 16px; border: 0; background: transparent; color: var(--ink-2); display: inline-flex; align-items: center; gap: 8px; }
 .segmented button + button { border-left: 1px solid var(--line-strong); }
 .segmented button[aria-checked="true"] { background: var(--ink); color: var(--bg); font-weight: 600; }
 .keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
@@ -390,3 +390,17 @@ button { cursor: pointer; }
 .ln-ticks i { position: absolute; top: 2px; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, 0.55); transform-origin: 50% 0; }
 .ln-bars { position: absolute; left: 4%; right: 4%; top: 26px; height: 52px; }
 .ln-bars b { position: absolute; bottom: 0; width: 5px; margin-left: -2.5px; height: calc(var(--h) * 52px); background: #fff; transform-origin: 50% 100%; }
+
+/* Hors ligne */
+.offline-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; padding: 9px 12px; border: 1px solid var(--line-strong); background: var(--surface); font-size: 13px; }
+.offline-bar b { font-weight: 700; }
+.row.away { opacity: 0.42; }
+.row.away .grip { visibility: hidden; }
+
+/* Nouveautés après une mise à jour */
+.modal.news { width: min(600px, 100%); }
+.news-body { display: grid; gap: 10px; font-size: 14px; color: var(--ink-2); }
+.news-body .lead { font-size: 15px; color: var(--ink); font-weight: 600; margin: 0; }
+.news-body h3 { margin: 8px 0 0; font: 500 11px/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.news-body ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; list-style: square; }
+.news-body b { color: var(--ink); }

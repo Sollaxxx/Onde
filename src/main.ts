@@ -1,4 +1,5 @@
 import "./styles.css";
+import { notesHtml } from "./nouveautes";
 import * as api from "./api";
 import { formatDuration, normalize, search } from "./search";
 import type { Catalog, Sound, Theme, UpdateInfo, View } from "./types";
@@ -39,6 +40,11 @@ const state = {
   launchAnim: ((v: unknown): LaunchMode => (v === false || v === "off" ? "off" : v === "muet" ? "muet" : "son"))(store.get<unknown>("onde.animDemarrage", "son")),
   premiere: null as api.PanelStatus | null,
   cleanup: null as api.CleanupInfo | null,
+  // Hors ligne : seuls les sons déjà téléchargés sont écoutables et glissables
+  news: null as string | null, // notes de version affichées après une mise à jour
+  offline: false,
+  local: new Set<string>(),
+  onlyLocal: true,
   installing: false,
   feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
   accueil: { step: 0, defaultDir: "", customDir: null, useCustom: false } as Accueil,
@@ -77,7 +83,11 @@ const ICON = {
   starOn: `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3l2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 16.9 6.4 20l1.3-6.2L3 9.5l6.3-.7z"/></svg>`,
   search: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>`,
   plug: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/></svg>`,
-  gear: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>`,
+  gear: `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(0 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(45 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(90 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(135 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(180 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(225 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(270 12 12)"/><rect x="10.6" y="1.6" width="2.8" height="4.2" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="6.3" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="12" cy="12" r="2.1" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
+  sun: `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.4" fill="none" stroke="currentColor" stroke-width="1.9"/><g fill="currentColor"><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(0 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(45 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(90 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(135 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(180 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(225 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(270 12 12)"/><rect x="11.2" y="1.5" width="1.6" height="3.4" transform="rotate(315 12 12)"/></g></svg>`,
+  moon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 1 1 9.4 4a6.6 6.6 0 0 0 10.6 10.6z"/></svg>`,
+  shrink: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10h6V4M20 14h-6v6M10 10L3 3M14 14l7 7"/></svg>`,
+  expand: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>`,
   chat: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4h16v12H9l-5 4z"/></svg>`,
   logo: `<svg width="20" height="20" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" fill="#002FA7"/><rect x="12" y="34" width="96" height="58" fill="#FFFFFF"/><g fill="#002FA7"><rect x="22" y="50" width="12" height="26"/><rect x="40" y="42" width="12" height="42"/><rect x="76" y="46" width="12" height="34"/></g><polygon points="50,4 78,4 78,20 64,32 50,20" fill="#E2231A"/><rect x="58" y="26" width="12" height="84" fill="#E2231A"/></svg>`,
   word: `<svg width="52" height="20" viewBox="0 0 256 100" role="img" aria-label="Onde"><g fill="none" stroke="currentColor" stroke-width="13"><circle cx="28" cy="52" r="21.5"/><path d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/><circle cx="160" cy="52" r="21.5"/><path d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/><path d="M204.5 52H254"/></g><polygon points="169,0 194,0 194,10 181.5,20 169,10" fill="#E2231A"/><rect x="175" y="14" width="13" height="66" fill="#E2231A"/></svg>`,
@@ -99,12 +109,18 @@ function visibleSounds(): Sound[] {
   if (state.view === "favoris") list = list.filter((s) => state.favs.has(s.id));
   if (state.view === "recents") list = state.recents.map((id) => byId(id)).filter((s): s is Sound => !!s);
   if (state.category) list = list.filter((s) => s.category === state.category);
+  if (state.offline && state.onlyLocal) list = list.filter((s) => state.local.has(s.id));
   return search(list, state.query);
 }
 
 // ---------- Rendu ----------
+let lastListKey = "";
+function isDark(): boolean {
+  return state.theme === "systeme" ? matchMedia("(prefers-color-scheme: dark)").matches : state.theme === "sombre";
+}
+
 function render(): void {
-  const resolved = state.theme === "systeme" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "sombre" : "clair") : state.theme;
+  const resolved = isDark() ? "sombre" : "clair";
   document.documentElement.dataset.theme = resolved;
   document.body.classList.toggle("compact", state.compact);
 
@@ -112,6 +128,9 @@ function render(): void {
   if (!list.some((s) => s.id === state.selId)) state.selId = list[0]?.id ?? state.selId;
   const cur = byId(state.selId);
   const focused = document.activeElement?.id;
+  // Le rendu remplace tout l'écran : on garde la position de défilement des zones qui défilent
+  const SCROLLERS = [".list", ".side", ".detail", ".set-main", ".cb-main", ".cb-detail"];
+  const scrolls = SCROLLERS.map((sel) => document.querySelector(sel)?.scrollTop ?? 0);
 
   if (state.screen === "accueil") {
     root.innerHTML = accueilScreen(state.accueil, state.theme, ICON.word, winButtons(), premiereAction());
@@ -128,7 +147,8 @@ function render(): void {
       ${cur ? detail(cur) : `<aside class="detail"><p class="hint">Sélectionnez un son.</p></aside>`}
     </div>
     ${cur ? minibar(cur) : ""}`}
-    ${state.feedback ? feedbackDialog() : ""}`;
+    ${state.feedback ? feedbackDialog() : ""}
+    ${state.news ? newsDialog(state.news) : ""}`;
 
   if (state.screen === "contrib" && focused?.startsWith("cb-")) {
     const el = document.getElementById(focused) as HTMLInputElement | null;
@@ -145,6 +165,11 @@ function render(): void {
     q.focus();
     q.setSelectionRange(q.value.length, q.value.length);
   }
+  // Nouvelle recherche, catégorie ou vue : la liste repart du haut
+  const listKey = `${state.screen}|${state.view}|${state.category}|${state.query}`;
+  if (listKey !== lastListKey) scrolls[0] = 0;
+  lastListKey = listKey;
+  SCROLLERS.forEach((sel, i) => { const el = document.querySelector(sel); if (el && scrolls[i]) el.scrollTop = scrolls[i]; });
   syncProgress();
 }
 
@@ -161,7 +186,7 @@ async function changeLibrary(path: string | null): Promise<void> {
 
 function settingsScreen(): string {
   const sections: [string, string][] = [["r-app", "Apparence"], ["r-lib", "Dossier des sons"], ["r-keys", "Raccourcis"], ["r-upd", "Mises à jour"], ["r-about", "À propos"]];
-  const themes: [Theme, string][] = [["clair", "Clair"], ["sombre", "Sombre"], ["systeme", "Comme Windows"]];
+  const themes: [Theme, string][] = [["clair", `${ICON.sun}Clair`], ["sombre", `${ICON.moon}Sombre`], ["systeme", api.isMac ? "Comme macOS" : "Comme Windows"]];
   const keys: [string, string][] = [["Rechercher", `${api.MOD} K`], ["Écouter / pause", "ESPACE"], ["Son suivant / précédent", "↓ ↑"], ["Ajouter aux favoris", "F"], ["Fermer / revenir", "ÉCHAP"], ["Glisser vers la timeline", "SOURIS"]];
   return `<div class="settings">
     <nav class="side" aria-label="Sections des réglages">
@@ -241,8 +266,8 @@ function titlebar(): string {
     <div class="brand" data-tauri-drag-region>${ICON.logo}${ICON.word}<span class="tag">BÊTA ${esc(state.version)}</span></div>
     <div class="tb-actions">
       <button class="tb-btn tb-hide" data-act="integrations" aria-haspopup="true" aria-expanded="${state.intOpen}">${ICON.plug}Intégrations</button>
-      <button class="tb-btn tb-hide" data-act="theme" aria-label="Changer de mode">${state.theme === "sombre" ? "Mode clair" : "Mode sombre"}</button>
-      <button class="tb-btn" data-act="compact" aria-pressed="${state.compact}">${state.compact ? "Grande fenêtre" : "Mode compact"}</button>
+      <button class="tb-btn tb-icon tb-hide" data-act="theme" aria-label="${isDark() ? "Passer en mode clair" : "Passer en mode sombre"}" title="${isDark() ? "Mode clair" : "Mode sombre"}">${isDark() ? ICON.sun : ICON.moon}</button>
+      <button class="tb-btn" data-act="compact" aria-pressed="${state.compact}" title="${state.compact ? "Revenir à la grande fenêtre" : "Petite fenêtre toujours au premier plan"}">${state.compact ? ICON.expand : ICON.shrink}${state.compact ? "Grande fenêtre" : "Mode compact"}</button>
       <button class="tb-btn tb-hide" data-act="feedback" aria-haspopup="dialog">${ICON.chat}Envoyer un retour</button>
       <button class="tb-btn tb-icon" data-act="settings" aria-pressed="${state.screen === "reglages"}" aria-label="Réglages" title="Réglages">${ICON.gear}</button>
       ${winButtons()}
@@ -275,6 +300,16 @@ function contribScreen(): string {
 }
 
 // ---------- Envoyer un retour ----------
+function newsDialog(html: string): string {
+  return `<div class="modal-bg" data-act="news-close">
+    <div class="modal news" role="dialog" aria-modal="true" aria-labelledby="news-title">
+      <header><p class="eyebrow">Mise à jour installée</p><h2 id="news-title">Nouveautés d'Onde ${esc(state.version)}</h2></header>
+      <div class="news-body">${html}</div>
+      <footer><button class="primary" data-act="news-close">C'est parti</button></footer>
+    </div>
+  </div>`;
+}
+
 function feedbackDialog(): string {
   const f = state.feedback!;
   const kinds: [api.FeedbackKind, string][] = [["bug", "Un bug"], ["idee", "Une idée"], ["autre", "Autre chose"]];
@@ -460,6 +495,8 @@ function mainList(list: Sound[]): string {
       <input id="q" type="search" value="${esc(state.query)}" placeholder="Décrivez un son : « porte qui grince », « whoosh »…" autocomplete="off" spellcheck="false" />
       <span class="mono" style="color:var(--muted);border:1px solid var(--line);padding:3px 6px">${api.MOD} K</span>
     </div>
+    ${state.offline ? `<div class="offline-bar" role="status"><span><b>Hors ligne</b> · ${state.local.size} son${state.local.size > 1 ? "s" : ""} disponible${state.local.size > 1 ? "s" : ""} sur cet ordinateur</span>
+      <button class="link-btn" data-act="offline-toggle">${state.onlyLocal ? "Afficher toute la bibliothèque" : "Seulement les sons disponibles"}</button></div>` : ""}
     <div class="chips">
       ${filters.map((c) => `<button class="chip" data-cat="${c ?? ""}" aria-pressed="${state.category === c}">${c ? esc(c) : "Tout"}</button>`).join("")}
       <span class="count mono">${list.length} ${list.length > 1 ? "SONS" : "SON"}</span>
@@ -472,6 +509,8 @@ function mainList(list: Sound[]): string {
 }
 
 function emptyText(): string {
+  if (state.offline && state.onlyLocal && !state.local.size) return "Hors ligne, et aucun son n'est encore sur cet ordinateur. Les sons que vous écoutez en ligne restent ensuite disponibles hors ligne.";
+  if (state.offline && state.onlyLocal && !state.query) return "Aucun son disponible hors ligne dans cette sélection.";
   if (state.view === "favoris" && !state.favs.size) return "Aucun favori pour l'instant. Touchez l'étoile d'un son, ou la touche F.";
   if (state.view === "recents" && !state.recents.length) return "Les sons que vous écoutez apparaîtront ici.";
   return "Aucun son ne correspond. Essayez « porte », « impact » ou « pluie ».";
@@ -480,7 +519,8 @@ function emptyText(): string {
 function row(s: Sound): string {
   const sel = s.id === state.selId;
   const playing = s.id === state.playingId && !audio.paused;
-  return `<div class="row" role="option" data-id="${s.id}" aria-selected="${sel}" title="Glissez vers votre timeline">
+  const away = state.offline && !state.local.has(s.id);
+  return `<div class="row${away ? " away" : ""}" role="option" data-id="${s.id}" aria-selected="${sel}" title="${away ? "Hors ligne : ce son n'est pas encore sur cet ordinateur" : "Glissez vers votre timeline"}">
     <button class="play ${playing ? "on" : ""}" data-act="play" aria-label="${playing ? "Pause" : "Écouter"} ${esc(s.title)}">${playing ? ICON.pause : ICON.play}</button>
     <div class="t"><b>${esc(s.title)}</b><span>${s.tags.map(esc).join(" · ")}</span></div>
     <span class="code">${s.code}</span>
@@ -538,7 +578,7 @@ async function localPath(s: Sound): Promise<string> {
   let job = inflight.get(s.id);
   if (!job) {
     job = api.ensureLocal(s.id).then(
-      (p) => { if (p) state.paths.set(s.id, p); inflight.delete(s.id); return p; },
+      (p) => { if (p) { state.paths.set(s.id, p); state.local.add(s.id); } inflight.delete(s.id); return p; },
       (e) => { inflight.delete(s.id); throw e; },
     );
     inflight.set(s.id, job);
@@ -551,9 +591,10 @@ async function togglePlay(id: string): Promise<void> {
   if (!s) return;
   if (state.playingId === id && !audio.paused) { audio.pause(); render(); return; }
   state.selId = id;
+  if (state.offline && !state.local.has(id)) { toast("Hors ligne : ce son n'est pas encore sur cet ordinateur."); render(); return; }
   try {
     if (state.playingId !== id) {
-      if (state.cdn) {
+      if (state.cdn && !state.offline) {
         audio.src = api.streamUrl(state.cdn, s); // la lecture démarre tout de suite…
         void localPath(s).catch(() => {});      // …pendant que le fichier arrive sur le disque
       } else {
@@ -585,6 +626,41 @@ function syncProgress(): void {
 }
 
 audio.addEventListener("ended", () => render());
+// La lecture en ligne échoue (connexion perdue) : on bascule sur le fichier local s'il existe
+audio.addEventListener("error", () => {
+  const s = byId(state.playingId);
+  if (!s || !audio.src.startsWith("http")) return;
+  if (!navigator.onLine) goOffline();
+  if (state.local.has(s.id)) {
+    void localPath(s).then(async (p) => { audio.src = await api.audioUrl(s, p); await audio.play(); render(); }).catch(() => {});
+  } else {
+    state.playingId = null;
+    toast("Lecture impossible : pas de connexion, et ce son n'est pas encore sur cet ordinateur.");
+    render();
+  }
+});
+
+// ---------- Hors ligne ----------
+function goOffline(): void {
+  if (state.offline) return;
+  state.offline = true;
+  render();
+}
+window.addEventListener("offline", goOffline);
+window.addEventListener("online", async () => {
+  if (!state.offline) return;
+  try {
+    const cat = await api.getCatalog();
+    if (cat.origin === "en ligne") {
+      state.catalog = cat.sounds.sort((a, b) => normalize(a.title).localeCompare(normalize(b.title), "fr"));
+      state.cdn = cat.cdn;
+      state.origin = cat.origin;
+    }
+  } catch { /* on réessaiera au prochain retour de connexion */ }
+  state.offline = state.origin === "cache";
+  if (!state.offline) toast("Connexion retrouvée : toute la bibliothèque est disponible.");
+  render();
+});
 (function loop() { if (!audio.paused) syncProgress(); requestAnimationFrame(loop); })();
 
 // ---------- Glisser-déposer vers le logiciel de montage ----------
@@ -610,6 +686,7 @@ root.addEventListener("pointermove", async (e) => {
   const s = byId(pending.id);
   pending = null;
   if (!s) return;
+  if (state.offline && !state.local.has(s.id)) { toast("Hors ligne : ce son n'est pas encore sur cet ordinateur."); return; }
   dragging = true;
   try {
     const ready = state.paths.has(s.id);
@@ -659,8 +736,8 @@ root.addEventListener("click", async (e) => {
       return;
     case "integrations": state.intOpen = !state.intOpen; render(); return;
     case "install-premiere": await installPremiere(); return;
-    case "theme": state.theme = state.theme === "sombre" ? "clair" : "sombre"; store.set("onde.theme", state.theme); render(); return;
-    case "compact": state.compact = !state.compact; await api.setCompactWindow(state.compact); render(); return;
+    case "theme": state.theme = isDark() ? "clair" : "sombre"; store.set("onde.theme", state.theme); render(); return;
+    case "compact": state.compact = !state.compact; store.set("onde.compact", state.compact); await api.setCompactWindow(state.compact); render(); return;
     case "win-min": return api.windowAction("minimize");
     case "win-max": return api.windowAction("maximize");
     case "win-close": return api.windowAction("close");
@@ -671,10 +748,12 @@ root.addEventListener("click", async (e) => {
       try { await api.setCleanupDays(days); state.cleanup = await api.cleanupInfo(); } catch { toast("Réglage impossible à enregistrer."); }
       render(); return;
     }
-    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.screen === "reglages") void api.cleanupInfo().then((c) => { state.cleanup = c; if (state.screen === "reglages") render(); }).catch(() => {}); if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
+    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.screen === "reglages") void api.cleanupInfo().then((c) => { state.cleanup = c; if (state.screen === "reglages") render(); }).catch(() => {}); if (state.compact) { state.compact = false; store.set("onde.compact", false); await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
     case "open-site": try { await api.openUrl("https://ondesound.com"); } catch { toast("Impossible d'ouvrir le site."); } return;
+    case "news-close": if (t.closest(".modal") && !t.closest('button[data-act="news-close"]')) return; state.news = null; render(); return;
+    case "offline-toggle": state.onlyLocal = !state.onlyLocal; render(); return;
     case "launch-set": state.launchAnim = t.closest<HTMLElement>("[data-value]")!.dataset.value as LaunchMode; store.set("onde.animDemarrage", state.launchAnim); render(); return;
     case "replay-accueil": {
       if (!introWanted()) { await openAccueil(); return; }
@@ -728,6 +807,10 @@ function toggleFav(): void {
 
 // Raccourcis : Ctrl K chercher · Espace écouter · ↑ ↓ naviguer · F favori · Échap fermer
 window.addEventListener("keydown", (e) => {
+  if (state.news) {
+    if (e.key === "Escape" || e.key === "Enter") { e.preventDefault(); state.news = null; render(); }
+    return;
+  }
   if (state.feedback) {
     if (e.key === "Escape") { state.feedback = null; render(); }
     else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void feedbackAction("fb-send", document.body);
@@ -775,7 +858,9 @@ async function loadLibrary(): Promise<boolean> {
     state.cdn = cat.cdn;
     state.origin = cat.origin;
     state.premiere = await api.premiereStatus().catch(() => null);
-    if (cat.origin === "cache") toast("Pas de connexion : bibliothèque enregistrée sur ce PC.");
+    state.local = new Set(await api.localSounds().catch(() => []));
+    state.offline = cat.origin === "cache" || !navigator.onLine;
+    if (state.offline) toast(`Hors ligne : ${state.local.size} son${state.local.size > 1 ? "s" : ""} disponible${state.local.size > 1 ? "s" : ""} sur cet ordinateur.`);
   } catch (e) {
     root.innerHTML = `<p class="empty" style="padding:40px">Impossible de charger la bibliothèque : ${esc(String(e))}</p>`;
     return false;
@@ -787,7 +872,13 @@ async function loadLibrary(): Promise<boolean> {
 
 async function start(): Promise<void> {
   const firstRun = !store.get("onde.accueil", 0);
-  document.documentElement.dataset.theme = state.theme === "sombre" ? "sombre" : "clair";
+  document.documentElement.dataset.theme = isDark() ? "sombre" : "clair";
+  // Rouvre dans le mode où l'application a été fermée (compact ou grande fenêtre)
+  if (!firstRun && store.get("onde.compact", false)) {
+    state.compact = true;
+    document.body.classList.add("compact");
+    await api.setCompactWindow(true).catch(() => {});
+  }
 
   if (firstRun && introWanted()) {
     // Premier lancement : l'animation démarre tout de suite, la bibliothèque charge en parallèle.
@@ -814,6 +905,11 @@ async function start(): Promise<void> {
     void api.showWindow();
     if (!loaded) return;
   }
+  // Première ouverture d'une nouvelle version : on montre ses nouveautés (pas au tout premier lancement)
+  const seen = store.get<string>("onde.versionVue", "");
+  if ((seen || !firstRun) && seen !== state.version) state.news = notesHtml(state.version);
+  store.set("onde.versionVue", state.version);
+  if (state.news) render();
   void api.contributionsOpen().then((open) => { state.contribOpen = open; if (open) render(); });
   state.update = await api.checkForUpdate();
   if (state.update) render();

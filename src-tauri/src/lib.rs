@@ -642,6 +642,21 @@ fn set_cleanup_days(app: AppHandle, days: u32) -> Result<(), String> {
     save_settings(&app, &settings)
 }
 
+/// Sons déjà présents sur l'ordinateur (écoutables et glissables sans connexion).
+#[tauri::command]
+fn local_sounds(app: AppHandle, store: State<'_, Store>) -> Result<Vec<String>, String> {
+    let guard = store.0.lock().map_err(err)?;
+    let Some(catalog) = guard.as_ref() else { return Ok(vec![]) };
+    let root = library_root(&app)?;
+    let test = catalog.origin == "test";
+    Ok(catalog
+        .sounds
+        .iter()
+        .filter(|s| root.join(&s.code).join(if test { file_name(s) } else { s.file.clone() }).is_file())
+        .map(|s| s.id.clone())
+        .collect())
+}
+
 /// Image affichée sous le curseur pendant le glisser-déposer.
 #[tauri::command]
 fn drag_icon_path(app: AppHandle) -> Result<String, String> {
@@ -682,12 +697,15 @@ pub fn run() {
             if let Some(win) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_secs(4));
-                    let _ = win.show();
+                    if !win.is_visible().unwrap_or(true) {
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    }
                 });
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

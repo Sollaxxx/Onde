@@ -94,6 +94,11 @@ export async function setLibraryDir(path: string | null): Promise<string> {
   return inTauri ? invoke<string>("set_library_dir", { path }) : path ?? "Documents\\Onde";
 }
 
+/** Identifiants des sons déjà présents sur l'ordinateur (utilisables hors ligne). */
+export async function localSounds(): Promise<string[]> {
+  return inTauri ? invoke<string[]>("local_sounds") : [];
+}
+
 /** Le son a été glissé dans un logiciel : il ne sera jamais effacé par le nettoyage automatique. */
 export async function markDragged(path: string): Promise<void> {
   if (inTauri) await invoke("mark_dragged", { path });
@@ -114,7 +119,10 @@ export async function setCleanupDays(days: number): Promise<void> {
 export async function showWindow(): Promise<void> {
   if (!inTauri) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().show();
+  const win = getCurrentWindow();
+  await win.show();
+  // Au premier plan, sinon sur Mac l'application démarre derrière les autres fenêtres
+  await win.setFocus().catch(() => {});
 }
 
 export interface PanelStatus { installed: string | null; bundled: string | null }
