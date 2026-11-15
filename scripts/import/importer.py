@@ -32,7 +32,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-UA = "OndeImporter/0.1 (+https://onde-nis.pages.dev; contact.ondesound@gmail.com)"
+UA = "OndeImporter/0.1 (+https://ondesound.com; contact.ondesound@gmail.com)"
 PAUSE = 1.5  # secondes entre deux requêtes vers un même site
 AUDIO_EXT = {".wav", ".ogg", ".mp3", ".flac", ".aif", ".aiff", ".opus", ".m4a"}
 COURT_MAX_S = 60      # en dessous : WAV 48 kHz (bruitages) ; au-dessus : MP3 320 (ambiances, musiques)

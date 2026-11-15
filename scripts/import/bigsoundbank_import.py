@@ -31,7 +31,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-UA = "OndeImporter/0.1 (+https://onde-nis.pages.dev; contact.ondesound@gmail.com)"
+UA = "OndeImporter/0.1 (+https://ondesound.com; contact.ondesound@gmail.com)"
 SITE = "https://bigsoundbank.com"
 PAR_PAGE = 40
 COURT_MAX_S = 30     # WAV 48 kHz jusqu'à 30 s, MP3 320 au-delà

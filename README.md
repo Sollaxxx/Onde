@@ -4,7 +4,7 @@
 
 Onde est une application de bureau gratuite et open source pour les monteurs vidéo : on cherche un bruitage ou une musique libre de droits, on l'écoute, puis on le glisse directement dans la timeline de son logiciel de montage (Premiere Pro, DaVinci Resolve, CapCut, Avid…).
 
-> Onde est en **bêta**, sur Windows et sur Mac (Intel et Apple Silicon).
+> Onde est en **bêta**, sur Windows et sur Mac (Intel et Apple Silicon). Téléchargement : **[ondesound.com](https://ondesound.com)**
 
 ## Ce que fait Onde
 

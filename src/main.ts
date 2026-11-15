@@ -222,7 +222,7 @@ function settingsScreen(): string {
           <h2 id="h-about">Onde ${esc(state.version)} · open-source</h2>
           <span>Gratuit, et ça s'entend. Code publié sous licence AGPL-3.0.</span>
         </div>
-        <div class="btns"><button class="secondary" data-act="replay-accueil">Revoir l'accueil</button><span class="badge">SOUTIEN BIENTÔT</span></div>
+        <div class="btns"><button class="secondary" data-act="open-site">ondesound.com</button><button class="secondary" data-act="replay-accueil">Revoir l'accueil</button><span class="badge">SOUTIEN BIENTÔT</span></div>
       </section>
     </main>
   </div>`;
@@ -661,6 +661,7 @@ root.addEventListener("click", async (e) => {
     case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
+    case "open-site": try { await api.openUrl("https://ondesound.com"); } catch { toast("Impossible d'ouvrir le site."); } return;
     case "launch-set": state.launchAnim = t.closest<HTMLElement>("[data-value]")!.dataset.value as LaunchMode; store.set("onde.animDemarrage", state.launchAnim); render(); return;
     case "replay-accueil": {
       if (!introWanted()) { await openAccueil(); return; }

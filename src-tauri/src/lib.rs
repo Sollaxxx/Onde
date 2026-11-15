@@ -230,9 +230,25 @@ fn library_dir(app: AppHandle) -> Result<String, String> {
 }
 
 /// Site d'Onde : retours des testeurs, contributions de sons.
-const SITE: &str = "https://onde-nis.pages.dev";
-/// Adresse qui reçoit les retours des testeurs (fonction du site Onde).
-const FEEDBACK: &str = "https://onde-nis.pages.dev/api/retour";
+/// L'ancienne adresse sert de secours si le nouveau domaine ne répond pas.
+const SITES: [&str; 2] = ["https://ondesound.com", "https://onde-nis.pages.dev"];
+
+/// Envoie une requête au site d'Onde, en essayant l'adresse de secours si la première est injoignable.
+/// (Seule une absence de réponse fait passer à la suivante : une erreur renvoyée par le serveur est gardée.)
+async fn site_request<F>(build: F) -> Result<reqwest::Response, String>
+where
+    F: Fn(&str) -> reqwest::RequestBuilder,
+{
+    let mut last = String::new();
+    for site in SITES {
+        match build(site).send().await {
+            Ok(res) => return Ok(res),
+            Err(e) => last = e.to_string(),
+        }
+    }
+    eprintln!("Site Onde injoignable : {last}");
+    Err("Pas de connexion au serveur Onde.".into())
+}
 /// Taille maximale d'un son proposé par la communauté.
 const CONTRIB_MAX_BYTES: u64 = 60 * 1024 * 1024;
 
@@ -246,14 +262,16 @@ async fn send_feedback(app: AppHandle, kind: String, message: String, email: Str
         "version": app.package_info().version.to_string(),
         "os": format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
     });
-    let res = http()?
-        .post(FEEDBACK)
-        .header("Content-Type", "application/json")
-        .body(body.to_string())
-        .timeout(Duration::from_secs(20))
-        .send()
-        .await
-        .map_err(|_| "Pas de connexion au serveur Onde.".to_string())?;
+    let client = http()?;
+    let body = body.to_string();
+    let res = site_request(|site| {
+        client
+            .post(format!("{site}/api/retour"))
+            .header("Content-Type", "application/json")
+            .body(body.clone())
+            .timeout(Duration::from_secs(20))
+    })
+    .await?;
     if res.status().is_success() {
         return Ok(());
     }
@@ -355,7 +373,7 @@ fn install_premiere_panel(app: AppHandle) -> Result<String, String> {
 #[tauri::command]
 async fn contributions_open() -> bool {
     let Ok(client) = http() else { return false };
-    let Ok(res) = client.get(format!("{SITE}/api/config")).timeout(Duration::from_secs(6)).send().await else { return false };
+    let Ok(res) = site_request(|site| client.get(format!("{site}/api/config")).timeout(Duration::from_secs(6))).await else { return false };
     let Ok(text) = res.text().await else { return false };
     serde_json::from_str::<serde_json::Value>(&text)
         .ok()
@@ -382,17 +400,19 @@ async fn send_contribution(app: AppHandle, path: String, meta: String) -> Result
     }
     let bytes = fs::read(&path).map_err(err)?;
     let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let res = http()?
-        .post(format!("{SITE}/api/contributions"))
-        .header("Content-Type", "application/octet-stream")
-        .header("X-Onde-Meta", meta)
-        .header("X-Onde-Fichier", urlencode(&name))
-        .header("X-Onde-Version", app.package_info().version.to_string())
-        .body(bytes)
-        .timeout(Duration::from_secs(300))
-        .send()
-        .await
-        .map_err(|_| "Pas de connexion au serveur Onde.".to_string())?;
+    let client = http()?;
+    let version = app.package_info().version.to_string();
+    let res = site_request(|site| {
+        client
+            .post(format!("{site}/api/contributions"))
+            .header("Content-Type", "application/octet-stream")
+            .header("X-Onde-Meta", meta.clone())
+            .header("X-Onde-Fichier", urlencode(&name))
+            .header("X-Onde-Version", version.clone())
+            .body(bytes.clone())
+            .timeout(Duration::from_secs(300))
+    })
+    .await?;
     let ok = res.status().is_success();
     let text = res.text().await.unwrap_or_default();
     let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
