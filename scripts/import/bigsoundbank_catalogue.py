@@ -16,7 +16,7 @@ import re
 import time
 import urllib.request
 
-UA = "OndeImporter/0.1 (+https://onde-nis.pages.dev; contact.ondesound@gmail.com)"
+UA = "OndeImporter/0.1 (+https://ondesound.com; contact.ondesound@gmail.com)"
 PAUSE = 1.5
 ENTRY = re.compile(
     r"<h2[^>]*>\s*<a href='(/[^']*-s(\d+)\.html)'>(.*?)</a>.*?"
