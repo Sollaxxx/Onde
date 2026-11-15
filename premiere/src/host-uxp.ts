@@ -18,6 +18,12 @@ async function exists(p: string): Promise<boolean> {
   try { await fs.lstat(p); return true; } catch { return false; }
 }
 
+/** Dossier de configuration de l'application Onde (partagé avec le panneau). */
+function configDir(): string {
+  const home = os.homedir();
+  return isWin ? join(home, "AppData", "Roaming", "app.onde.desktop") : join(home, "Library", "Application Support", "app.onde.desktop");
+}
+
 const major = parseInt(String(uxp.host?.version ?? "0").split(".")[0], 10) || 0;
 
 async function findOrCreateBin(project: any): Promise<any> {
@@ -85,7 +91,7 @@ const host: Host = {
 
   async libraryDir() {
     const home = os.homedir();
-    const cfg = isWin ? join(home, "AppData", "Roaming", "app.onde.desktop") : join(home, "Library", "Application Support", "app.onde.desktop");
+    const cfg = configDir();
     try {
       const hint = String(await fs.readFile(join(cfg, "bibliotheque.txt"), { encoding: "utf-8" })).trim();
       if (hint) return hint;
@@ -134,6 +140,15 @@ const host: Host = {
     });
     if (!ok) throw new Error("Premiere a refusé l'insertion");
     return `« ${title} » posé sur A${track + 1} à ${timecode(start)}.`;
+  },
+
+  async markUsed(path) {
+    const cfg = configDir();
+    await fs.mkdir(cfg, { recursive: true }).catch(() => 0);
+    const file = join(cfg, "sons-glisses.txt");
+    let prev = "";
+    try { prev = String(await fs.readFile(file, { encoding: "utf-8" })); } catch { /* premier son */ }
+    await fs.writeFile(file, prev + path + "\n", { encoding: "utf-8" });
   },
 
   setDragData(dt, path, sound) {

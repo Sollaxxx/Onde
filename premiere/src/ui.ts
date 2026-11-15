@@ -21,6 +21,8 @@ export interface Host {
   insert(path: string, durationSec: number, title: string): Promise<string>;
   /** Remplit les données du glisser-déposer pour un fichier local. */
   setDragData(dt: DataTransfer, path: string, sound: Sound): void;
+  /** Note que ce son sert dans un montage : l'application Onde ne l'effacera jamais. */
+  markUsed(path: string): Promise<void>;
 }
 
 const PAGE = 60;
@@ -88,6 +90,7 @@ export function startPanel(host: Host): void {
       const path = await ensureLocal(s);
       status("Insertion dans la séquence…");
       status(await host.insert(path, s.durationMs / 1000, s.title), "ok");
+      void host.markUsed(path).catch(() => {});
     } catch (e) {
       status(`Insertion impossible : ${errText(e)}`, "err");
     } finally {
@@ -129,6 +132,7 @@ export function startPanel(host: Host): void {
     const path = s ? state.local.get(s.id) : undefined;
     if (!s || !path || !e.dataTransfer) { e.preventDefault(); return; }
     host.setDragData(e.dataTransfer, path, s);
+    void host.markUsed(path).catch(() => {});
     status(`Lâchez « ${s.title} » dans la timeline ou le panneau Projet.`);
   });
 

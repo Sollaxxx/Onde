@@ -38,6 +38,7 @@ const state = {
   // Animation de lancement : "son" (par défaut), "muet" ou "off" (l'ancien réglage true/false est repris)
   launchAnim: ((v: unknown): LaunchMode => (v === false || v === "off" ? "off" : v === "muet" ? "muet" : "son"))(store.get<unknown>("onde.animDemarrage", "son")),
   premiere: null as api.PanelStatus | null,
+  cleanup: null as api.CleanupInfo | null,
   installing: false,
   feedback: null as null | { kind: api.FeedbackKind; message: string; email: string; sending: boolean; error: string },
   accueil: { step: 0, defaultDir: "", customDir: null, useCustom: false } as Accueil,
@@ -202,6 +203,12 @@ function settingsScreen(): string {
           <div><b>Revenir au dossier par défaut</b><span>Documents\\Onde. Les sons déjà utilisés restent à leur place : vos projets de montage les retrouvent toujours.</span></div>
           <button class="secondary" data-act="reset-folder">Rétablir</button>
         </div>
+        ${state.cleanup ? `<div class="set-row">
+          <div><b>Nettoyage automatique</b><span>Les sons seulement écoutés sont effacés s'ils ne servent plus. Ceux que vous avez glissés dans un logiciel de montage ne sont jamais effacés.${state.cleanup.keptCount ? ` ${state.cleanup.keptCount} son${state.cleanup.keptCount > 1 ? "s" : ""} conservé${state.cleanup.keptCount > 1 ? "s" : ""}.` : ""}</span></div>
+          <div class="segmented" role="radiogroup" aria-label="Nettoyage automatique">
+            ${([[7, "7 jours"], [30, "30 jours"], [90, "90 jours"], [0, "Jamais"]] as const).map(([v, l]) => `<button role="radio" data-act="cleanup-set" data-value="${v}" aria-checked="${state.cleanup!.days === v}">${l}</button>`).join("")}
+          </div>
+        </div>` : ""}
       </section>
 
       <section id="r-keys" aria-labelledby="h-keys">
@@ -610,6 +617,7 @@ root.addEventListener("pointermove", async (e) => {
     const path = await localPath(s);
     if (!ready && !mouseDown) { toast("Son prêt : attrapez-le à nouveau pour le glisser."); return; }
     await api.dragOut([path]);
+    void api.markDragged(path).catch(() => {}); // utilisé dans un montage : ne sera jamais effacé
   } catch (err) {
     toast(api.inTauri ? `Glisser impossible : ${err instanceof Error ? err.message : err}` : "Le glisser-déposer vers un logiciel fonctionne dans l'application Onde, pas dans le navigateur.");
   } finally {
@@ -658,7 +666,12 @@ root.addEventListener("click", async (e) => {
     case "win-close": return api.windowAction("close");
     case "update-later": state.update = null; render(); return;
     case "update-install": if (state.update) { toast("Téléchargement de la mise à jour…"); await state.update.install(); } return;
-    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
+    case "cleanup-set": {
+      const days = Number(t.closest<HTMLElement>("[data-value]")!.dataset.value);
+      try { await api.setCleanupDays(days); state.cleanup = await api.cleanupInfo(); } catch { toast("Réglage impossible à enregistrer."); }
+      render(); return;
+    }
+    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.screen === "reglages") void api.cleanupInfo().then((c) => { state.cleanup = c; if (state.screen === "reglages") render(); }).catch(() => {}); if (state.compact) { state.compact = false; await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
     case "open-site": try { await api.openUrl("https://ondesound.com"); } catch { toast("Impossible d'ouvrir le site."); } return;

@@ -67,15 +67,21 @@ function applyHostTheme(): void {
   } catch { /* thème par défaut */ }
 }
 
+/** Dossier de configuration de l'application Onde (partagé avec le panneau). */
+function configDir(): string {
+  const home = os.homedir();
+  return isWin
+    ? path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "app.onde.desktop")
+    : path.join(home, "Library", "Application Support", "app.onde.desktop");
+}
+
 const host: Host = {
   canDrag: true,
   sep: path.sep,
 
   async libraryDir() {
     const home = os.homedir();
-    const cfg = isWin
-      ? path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "app.onde.desktop")
-      : path.join(home, "Library", "Application Support", "app.onde.desktop");
+    const cfg = configDir();
     try {
       const hint = fs.readFileSync(path.join(cfg, "bibliotheque.txt"), "utf8").trim();
       if (hint) return hint;
@@ -114,6 +120,12 @@ const host: Host = {
     try { res = JSON.parse(raw); } catch { throw new Error(raw || "Premiere n'a pas répondu"); }
     if (!res.ok) throw new Error(ERRORS[res.error] ?? res.error);
     return `« ${title} » posé sur A${res.track + 1} à ${timecode(res.start)}.`;
+  },
+
+  async markUsed(file) {
+    const cfg = configDir();
+    fs.mkdirSync(cfg, { recursive: true });
+    fs.appendFileSync(path.join(cfg, "sons-glisses.txt"), file + "\n", "utf8");
   },
 
   setDragData(dt, file, _sound: Sound) {

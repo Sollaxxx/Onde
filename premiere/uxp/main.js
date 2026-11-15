@@ -150,6 +150,8 @@
         const path = await ensureLocal(s);
         status("Insertion dans la séquence…");
         status(await host2.insert(path, s.durationMs / 1e3, s.title), "ok");
+        void host2.markUsed(path).catch(() => {
+        });
       } catch (e) {
         status(`Insertion impossible : ${errText(e)}`, "err");
       } finally {
@@ -201,6 +203,8 @@
         return;
       }
       host2.setDragData(e.dataTransfer, path, s);
+      void host2.markUsed(path).catch(() => {
+      });
       status(`Lâchez « ${s.title} » dans la timeline ou le panneau Projet.`);
     });
     listEl.addEventListener("mouseover", (e) => {
@@ -309,6 +313,10 @@
       return false;
     }
   }
+  function configDir() {
+    const home = os.homedir();
+    return isWin ? join(home, "AppData", "Roaming", "app.onde.desktop") : join(home, "Library", "Application Support", "app.onde.desktop");
+  }
   var _a, _b;
   var major = parseInt(String((_b = (_a = uxp.host) == null ? void 0 : _a.version) != null ? _b : "0").split(".")[0], 10) || 0;
   async function findOrCreateBin(project) {
@@ -375,7 +383,7 @@
     sep: SEP,
     async libraryDir() {
       const home = os.homedir();
-      const cfg = isWin ? join(home, "AppData", "Roaming", "app.onde.desktop") : join(home, "Library", "Application Support", "app.onde.desktop");
+      const cfg = configDir();
       try {
         const hint = String(await fs.readFile(join(cfg, "bibliotheque.txt"), { encoding: "utf-8" })).trim();
         if (hint) return hint;
@@ -422,6 +430,17 @@
       });
       if (!ok) throw new Error("Premiere a refusé l'insertion");
       return `« ${title} » posé sur A${track + 1} à ${timecode(start)}.`;
+    },
+    async markUsed(path) {
+      const cfg = configDir();
+      await fs.mkdir(cfg, { recursive: true }).catch(() => 0);
+      const file = join(cfg, "sons-glisses.txt");
+      let prev = "";
+      try {
+        prev = String(await fs.readFile(file, { encoding: "utf-8" }));
+      } catch {
+      }
+      await fs.writeFile(file, prev + path + "\n", { encoding: "utf-8" });
     },
     setDragData(dt, path, sound) {
       var _a2;

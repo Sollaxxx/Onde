@@ -145,6 +145,8 @@
         const path2 = await ensureLocal(s);
         status("Insertion dans la séquence…");
         status(await host2.insert(path2, s.durationMs / 1e3, s.title), "ok");
+        void host2.markUsed(path2).catch(() => {
+        });
       } catch (e) {
         status(`Insertion impossible : ${errText(e)}`, "err");
       } finally {
@@ -196,6 +198,8 @@
         return;
       }
       host2.setDragData(e.dataTransfer, path2, s);
+      void host2.markUsed(path2).catch(() => {
+      });
       status(`Lâchez « ${s.title} » dans la timeline ou le panneau Projet.`);
     });
     listEl.addEventListener("mouseover", (e) => {
@@ -344,12 +348,16 @@
     } catch {
     }
   }
+  function configDir() {
+    const home = os.homedir();
+    return isWin ? path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "app.onde.desktop") : path.join(home, "Library", "Application Support", "app.onde.desktop");
+  }
   var host = {
     canDrag: true,
     sep: path.sep,
     async libraryDir() {
       const home = os.homedir();
-      const cfg = isWin ? path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "app.onde.desktop") : path.join(home, "Library", "Application Support", "app.onde.desktop");
+      const cfg = configDir();
       try {
         const hint = fs.readFileSync(path.join(cfg, "bibliotheque.txt"), "utf8").trim();
         if (hint) return hint;
@@ -390,6 +398,11 @@
       }
       if (!res.ok) throw new Error(ERRORS[res.error] ?? res.error);
       return `« ${title} » posé sur A${res.track + 1} à ${timecode(res.start)}.`;
+    },
+    async markUsed(file) {
+      const cfg = configDir();
+      fs.mkdirSync(cfg, { recursive: true });
+      fs.appendFileSync(path.join(cfg, "sons-glisses.txt"), file + "\n", "utf8");
     },
     setDragData(dt, file, _sound) {
       dt.setData("com.adobe.cep.dnd.file.0", file);

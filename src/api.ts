@@ -94,6 +94,22 @@ export async function setLibraryDir(path: string | null): Promise<string> {
   return inTauri ? invoke<string>("set_library_dir", { path }) : path ?? "Documents\\Onde";
 }
 
+/** Le son a été glissé dans un logiciel : il ne sera jamais effacé par le nettoyage automatique. */
+export async function markDragged(path: string): Promise<void> {
+  if (inTauri) await invoke("mark_dragged", { path });
+}
+
+export interface CleanupInfo { days: number; pendingCount: number; pendingBytes: number; keptCount: number }
+
+/** Réglage du nettoyage automatique (jours sans écoute avant d'effacer ; 0 = jamais). */
+export async function cleanupInfo(): Promise<CleanupInfo | null> {
+  return inTauri ? invoke<CleanupInfo>("cleanup_info") : null;
+}
+
+export async function setCleanupDays(days: number): Promise<void> {
+  if (inTauri) await invoke("set_cleanup_days", { days });
+}
+
 /** Affiche la fenêtre (elle démarre cachée pour éviter un flash blanc). */
 export async function showWindow(): Promise<void> {
   if (!inTauri) return;
