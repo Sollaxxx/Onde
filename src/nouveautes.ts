@@ -1,5 +1,8 @@
 // « Nouveautés » : les notes de la version (CHANGELOG.md), montrées une fois après une mise à jour.
-import changelog from "../CHANGELOG.md?raw";
+import changelogRaw from "../CHANGELOG.md?raw";
+
+// Sur Windows, le fichier peut avoir des fins de ligne \r\n : on les ramène à \n
+const changelog = changelogRaw.replace(/\r\n?/g, "\n");
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const inline = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");

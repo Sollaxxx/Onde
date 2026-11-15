@@ -4,7 +4,8 @@
 import { readFileSync } from "node:fs";
 
 const version = process.argv[2] ?? JSON.parse(readFileSync("package.json", "utf8")).version;
-const text = readFileSync("CHANGELOG.md", "utf8");
+// Sur Windows, git peut convertir les fins de ligne en \r\n : on les ramène à \n
+const text = readFileSync("CHANGELOG.md", "utf8").replace(/\r\n?/g, "\n");
 const start = text.indexOf(`\n## ${version}\n`);
 if (start < 0) {
   console.error(`Pas de notes pour la version ${version} dans CHANGELOG.md`);

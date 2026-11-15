@@ -1,3 +1,3 @@
-# Auto detect text files and perform LF normalization
-* text=auto
-*.bat text eol=crlf
+# Fins de ligne Unix pour les fichiers lus par les scripts, quel que soit le système
+CHANGELOG.md text eol=lf
+*.md text eol=lf
