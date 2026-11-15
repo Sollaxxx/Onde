@@ -18,6 +18,8 @@ export interface IntroSound {
   clip(at?: number): void;
   rewind(dur: number, at?: number): void;
   resolve(at?: number): void;
+  /** Animation de lancement (≈ 2 s) : la ligne de temps, le tracé, le tic, les ondes, la sortie. */
+  launch(at?: number): void;
   /** Passage vers l'application : le rideau bleu se ferme. */
   curtain(dur: number, at?: number): void;
   /** Passage vers l'application : la tête de lecture balaie l'écran de gauche à droite. */
@@ -418,6 +420,54 @@ export function makeIntroSound(ctx: BaseAudioContext, volume = 0.9): IntroSound 
         b.start(t + 0.04);
         b.stop(t + 4);
       }
+    },
+
+    launch(at) {
+      const t = now(at);
+      // La ligne de temps se déroule depuis le centre : souffle léger qui s'ouvre vers les côtés
+      whoosh(t, 0.42, 900, 6000, 0.1, 0, 0);
+      for (let k = 0; k < 7; k++) grain(t + 0.04 + k * 0.045, 4200 + k * 250, 0.035, 0.004, (k % 2 ? 1 : -1) * (0.2 + k * 0.1), 4, 0.3);
+      // Le logo se dessine : frottements de feutre rapides
+      [0.16, 0.24, 0.32, 0.4, 0.48].forEach((o, i) => {
+        const src = noiseSrc(t + o, 0.5);
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.Q.value = 1.3;
+        bp.frequency.setValueAtTime(2400 + i * 260, t + o);
+        bp.frequency.exponentialRampToValueAtTime(4200 + i * 200, t + o + 0.3);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t + o);
+        g.gain.linearRampToValueAtTime(0.12, t + o + 0.04);
+        g.gain.setTargetAtTime(0, t + o + 0.07, 0.07);
+        src.connect(bp).connect(g);
+        out(g, 0.3, i % 2 ? 0.25 : -0.25);
+      });
+      // La tête de lecture tombe dans le « d » : tic net et petit choc grave
+      const tl = t + 0.8;
+      const tic = ctx.createOscillator();
+      tic.frequency.setValueAtTime(2600, tl);
+      tic.frequency.exponentialRampToValueAtTime(1200, tl + 0.03);
+      const gt = ctx.createGain();
+      pluck(gt.gain, tl, 0.3, 0.002, 0.025);
+      tic.connect(gt);
+      out(gt, 0.45);
+      tic.start(tl);
+      tic.stop(tl + 0.3);
+      const low = ctx.createOscillator();
+      low.frequency.setValueAtTime(140, tl);
+      low.frequency.exponentialRampToValueAtTime(D2 / 2, tl + 0.2);
+      const gl = ctx.createGain();
+      pluck(gl.gain, tl, 0.5, 0.004, 0.11);
+      low.connect(gl);
+      out(gl, 0.12);
+      low.start(tl);
+      low.stop(tl + 1);
+      // Les ondes : un petit accord de ré qui sonne et s'étale dans l'espace
+      [[D2 * 8, 0.07, 0], [D2 * 12, 0.05, 0.12], [D2 * 16 * 1.26, 0.035, 0.24], [D2 * 16, 0.04, 0.36]].forEach(([f, a, d], i) => {
+        ping(tl + 0.02 + d, f, a, 0.55, [-0.4, 0.4, -0.2, 0.25][i], 0.85);
+      });
+      // Sortie : le logo glisse vers sa place, souffle doux vers la gauche
+      whoosh(t + 1.32, 0.5, 2600, 600, 0.09, 0.2, -0.7);
     },
 
     curtain(dur, at) {

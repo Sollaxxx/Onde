@@ -378,5 +378,15 @@ button { cursor: pointer; }
 .mac .ob-bar { justify-content: flex-start; }
 
 /* ---------- Animation de lancement ---------- */
-.launch { position: fixed; inset: 0; z-index: 100; background: #002fa7; display: grid; place-items: center; cursor: pointer; }
-.ln-icon { width: 120px; height: 120px; overflow: visible; }
+.launch { position: fixed; inset: 0; z-index: 100; background: #002fa7; display: grid; place-items: center; cursor: pointer; overflow: hidden; }
+.ln-stage { position: relative; display: grid; place-items: center; width: min(900px, 92vw); height: 360px; }
+.ln-logo { position: relative; z-index: 2; display: flex; align-items: center; gap: clamp(18px, 3vw, 34px); }
+.ln-icon { width: clamp(72px, 11vw, 130px); height: auto; aspect-ratio: 1; overflow: visible; }
+.ln-word { width: clamp(190px, 29vw, 340px); height: auto; aspect-ratio: 256 / 100; overflow: visible; }
+.ln-rings { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.ln-rings span { position: absolute; width: min(620px, 80vw); aspect-ratio: 1; border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; }
+.ln-tl { position: fixed; left: 0; right: 0; top: calc(50% + clamp(70px, 10vw, 118px)); height: 64px; pointer-events: none; }
+.ln-line { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: rgba(255, 255, 255, 0.6); transform-origin: 50% 50%; }
+.ln-ticks i { position: absolute; top: 2px; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, 0.55); transform-origin: 50% 0; }
+.ln-bars { position: absolute; left: 4%; right: 4%; top: 26px; height: 52px; }
+.ln-bars b { position: absolute; bottom: 0; width: 5px; margin-left: -2.5px; height: calc(var(--h) * 52px); background: #fff; transform-origin: 50% 100%; }

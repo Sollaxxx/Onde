@@ -44,7 +44,7 @@ function markup(): string {
         <path pathLength="1" d="M72.5 80V24M72.5 52a21.5 21.5 0 0 1 43 0V80"/>
         <circle pathLength="1" cx="160" cy="52" r="21.5"/>
         <path pathLength="1" d="M247.5 52A21.5 21.5 0 1 0 242.5 65.8"/>
-        <path pathLength="1" d="M204.5 52H247.5"/>
+        <path pathLength="1" d="M204.5 52H254"/>
       </g>
       <g class="i-ph" fill="#E2231A">
         <polygon class="i-head" points="-4.4,0 4.4,0 4.4,3.5 0,7 -4.4,3.5"/>
