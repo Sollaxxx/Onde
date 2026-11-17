@@ -105,7 +105,8 @@ def main() -> int:
         # imports (BigSoundBank, Kenney…) et les contributions de la communauté. Par défaut on les
         # garde tous et on ajoute ceux de ce dossier ; --remplacer ne garde que la communauté.
         try:
-            with urllib.request.urlopen(f"{args.cdn}/catalogue/v1.json", timeout=60) as r:
+            req = urllib.request.Request(f"{args.cdn}/catalogue/v1.json?t={int(time.time())}", headers={"User-Agent": "OndeImporter/0.1 (+https://ondesound.com)"})
+            with urllib.request.urlopen(req, timeout=60) as r:
                 online = json.loads(r.read().decode("utf-8"))
             ids = {s["id"] for s in published}
             kept = [s for s in online.get("sounds", []) if s["id"] not in ids and (s.get("contribution") or not args.remplacer)]
