@@ -6,6 +6,8 @@ Onde est une application de bureau gratuite et open source pour les monteurs vid
 
 > Onde est en **bêta**, sur Windows et sur Mac (Intel et Apple Silicon). Téléchargement : **[ondesound.com](https://ondesound.com)**
 
+*[English below ↓](#english)*
+
 ## Ce que fait Onde
 
 - Une **bibliothèque en ligne** de sons libres de droits, classés par catégories (UCS).
@@ -80,3 +82,40 @@ Les retours, les bugs et les idées sont les bienvenus dans les [Issues](../../i
 Le code est publié sous licence **GNU AGPL-3.0** (voir [`LICENSE`](LICENSE)).
 
 **Le nom « Onde » et le logo Onde ne sont pas couverts par la licence AGPL.** Une version modifiée de ce logiciel doit porter un autre nom et un autre logo.
+
+---
+
+## English
+
+**Onde** is a free, open-source desktop app for video editors. Search for a royalty-free sound effect, preview it instantly, and drag it straight into your timeline: Premiere Pro, DaVinci Resolve, Final Cut, CapCut, Avid or any editor that accepts a dropped file.
+
+> Onde is in **beta**, on Windows and Mac (Intel and Apple Silicon). Download: **[ondesound.com](https://ondesound.com/en/)**
+
+### What it does
+
+- An **online library of 6,000+ CC0 sounds** in 81 categories: free for commercial use, no credit needed.
+- **Instant search** in English and French, accent-insensitive, with synonyms (“boom” finds impacts, “footsteps” finds steps).
+- **Instant preview** with a waveform, before anything is downloaded.
+- **Drag and drop** into any editor: grab a row, the waveform or the blue button and drop it on your timeline.
+- **Never lose a sound**: every sound you use is copied to a stable folder, sorted by category (`Documents/Onde` by default, changeable in Settings), so your editing projects always find it.
+- **Your own sounds**: add your sound folders and search them next to the library. Files stay where they are.
+- **Playlists** and one-click likes, for each project or client.
+- **Compact mode**: a small always-on-top window, handy next to your editor or on a second screen. Light and dark modes too.
+- **Offline mode**: sounds you already used keep working without internet.
+- A **panel inside Premiere Pro** (2019 and later), installable in one click from the app.
+- **Automatic updates**, signed by the Onde team.
+
+### Install
+
+Everything is on the [Releases](../../releases/latest) page.
+
+**Windows**: download `Onde_x.y.z_x64-setup.exe` and run it. Until Onde is signed with a commercial certificate, SmartScreen may warn you: click **More info**, then **Run anyway**.
+
+**Mac** (Intel and Apple Silicon, macOS 11 or later): download `Onde_x.y.z_universal.dmg`, open it and drag Onde into Applications. Onde isn't signed by Apple yet, so macOS blocks the first launch: open **System Settings → Privacy & Security** and click **Open Anyway** at the bottom. You only do this once.
+
+The full source code is in this repository: you can read exactly what the app does before running it.
+
+### License
+
+Code under **GNU AGPL-3.0** (see [`LICENSE`](LICENSE)). The name “Onde” and the Onde logo are not covered by the AGPL: a modified version must use another name and logo. Library sounds are CC0.
+

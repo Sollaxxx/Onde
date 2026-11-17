@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Onde — Bruitages gratuits et libres de droits pour monteurs vidéo</title>
-<meta name="description" content="Bruitages et musiques libres de droits, à glisser directement dans votre timeline. Gratuit, sans abonnement, pour Premiere Pro, DaVinci Resolve, CapCut et les autres.">
+<meta name="description" content="Bruitages libres de droits, à glisser directement dans votre timeline. Gratuit, sans abonnement, pour Premiere Pro, DaVinci Resolve, CapCut et les autres.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Onde — Gratuit, et ça s'entend.">
 <meta property="og:description" content="Cherchez un son, écoutez-le, glissez-le dans votre timeline. Gratuit et open-source.">
@@ -115,6 +115,9 @@ a{color:inherit}
 .lib-search input::-webkit-search-cancel-button{display:none}
 .snd{display:flex;align-items:center;gap:12px;padding:10px 12px 10px 14px;border-bottom:1px solid var(--line);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;transition:background-color .35s var(--ease)}
 .snd:hover{background:var(--track)}
+.snd[hidden]{display:none}
+.built .step h3{font-size:clamp(24px,2.4vw,32px);line-height:1.05}
+.count-line{margin-top:14px;font-size:13px;letter-spacing:.06em;color:var(--ink-2);animation:focusIn 1.1s var(--ease) both;animation-delay:.45s}
 .snd.is-dragging{opacity:.4}
 .lib-empty{padding:18px 16px;color:var(--muted);font-size:14px}
 .play{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;transition:transform .45s var(--ease),background-color .45s var(--ease),color .45s var(--ease),border-color .45s var(--ease)}
@@ -152,6 +155,7 @@ a{color:inherit}
 .clip svg{position:absolute;left:0;right:0;bottom:4px;width:100%;height:60%}
 .clip .x{position:absolute;top:2px;right:2px;z-index:2;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:inherit;cursor:pointer;opacity:.75}
 .clip .x:hover{opacity:1}
+@media (pointer:coarse){.clip .x{width:36px;height:36px;top:0;right:0}}
 @keyframes drop{from{filter:blur(8px);opacity:0;transform:translateY(-10px)}to{filter:blur(0);opacity:1;transform:none}}
 .playhead{position:absolute;top:0;bottom:0;width:0;pointer-events:none;z-index:5}
 .playhead::before{content:"";position:absolute;top:0;left:-8px;width:16px;height:16px;background:var(--red);clip-path:polygon(0 0,100% 0,100% 55%,50% 100%,0 55%)}
@@ -298,14 +302,15 @@ footer a:hover{color:var(--ink)}
 <main id="top">
   <div class="wrap">
     <section class="hero" aria-labelledby="h1">
-      <p class="eyebrow" style="animation:focusIn 1s var(--ease) both">Bruitages et musiques libres de droits · Windows et Mac</p>
+      <p class="eyebrow" style="animation:focusIn 1s var(--ease) both">Bruitages libres de droits · Windows et Mac</p>
       <h1 id="h1"><span class="hw" style="--i:0">Gratuit,</span> <span class="hw" style="--i:1">et</span> <span class="hw" style="--i:2">ça</span> <span class="hw" style="--i:3">s'entend.</span></h1>
+      <p class="count-line mono">6 000+ sons CC0 · 81 catégories · usage commercial gratuit</p>
       <div class="hero-row">
         <p class="lede">Cherchez un son, écoutez-le, glissez-le dans votre timeline. Onde fonctionne avec Premiere Pro, DaVinci Resolve, Final Cut, CapCut et tous les logiciels qui acceptent un fichier glissé.</p>
         <div class="cta">
           <a class="btn btn-primary js-dl" data-os="win" href="/telecharger"><span>Télécharger pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
           <a class="btn btn-ghost" href="#demo"><span>Essayer la démo</span></a>
-          <p class="cta-note mono">Gratuit · Sans compte · <span class="js-ver">Bêta</span> · <a class="js-other" href="/telecharger/mac" data-win="Aussi pour Windows" data-mac="Aussi pour Mac">Aussi pour Mac</a></p>
+          <p class="cta-note mono">Gratuit · Sans compte · <span class="js-ver">Bêta</span> · <a class="js-other" href="/telecharger/mac" data-win="Aussi pour Windows" data-mac="Aussi pour Mac">Aussi pour Mac</a> · <a href="https://github.com/Sollaxxx/Onde" rel="noopener">Voir le code sur GitHub</a></p>
         </div>
       </div>
 
@@ -357,6 +362,12 @@ footer a:hover{color:var(--ink)}
       <span class="eyebrow">Fonctionne avec</span>
       <span class="names">Premiere Pro<i>/</i>DaVinci Resolve<i>/</i>Final Cut Pro<i>/</i>Avid<i>/</i>CapCut<i>/</i>les autres</span>
     </div>
+      <h2 class="eyebrow reveal" style="margin-top:56px">Pensé pour le montage</h2>
+    <ul class="steps built reveal">
+      <li class="step"><h3>Aucun son perdu.</h3><p>Chaque son utilisé est copié dans un dossier stable, Documents/Onde : vos projets le retrouvent toujours.</p></li>
+      <li class="step"><h3>Toujours devant.</h3><p>Le mode compact fait d'Onde une petite fenêtre qui reste au-dessus de votre logiciel.</p></li>
+      <li class="step"><h3>Une recherche qui vous comprend.</h3><p>En français et en anglais, avec des synonymes : « boom » trouve les impacts, « footsteps » les pas.</p></li>
+    </ul>
   </section>
 
   <section class="block wrap" id="gratuit" aria-labelledby="h-free">
@@ -366,7 +377,7 @@ footer a:hover{color:var(--ink)}
         <h2 class="line" id="h-free">Gratuit pour toujours, pour l'essentiel.</h2>
         <ul class="pills">
           <li>App Windows et Mac</li>
-          <li>Toute la bibliothèque de base</li>
+          <li>Toute la bibliothèque · 6 000+ sons</li>
           <li>Usage commercial · CC0</li>
           <li>Open-source</li>
         </ul>
@@ -415,7 +426,7 @@ footer a:hover{color:var(--ink)}
           <a class="btn btn-primary btn-xl js-dl" data-os="win" href="/telecharger"><span>Pour Windows</span><span class="arr" aria-hidden="true">↓</span></a>
           <a class="btn btn-primary btn-xl js-dl" data-os="mac" href="/telecharger/mac"><span>Pour Mac</span><span class="arr" aria-hidden="true">↓</span></a>
         </div>
-        <p class="dl-meta"><span class="js-ver">Bêta</span> · Windows 10 et 11 (64 bits) · macOS 11 et plus (Intel et Apple Silicon) · Gratuit, sans compte · <a href="https://github.com/Sollaxxx/Onde/releases" rel="noopener">Toutes les versions</a></p>
+        <p class="dl-meta"><span class="js-ver">Bêta</span> · Windows 10 et 11 (64 bits) · macOS 11 et plus (Intel et Apple Silicon) · Gratuit, sans compte · <a href="https://github.com/Sollaxxx/Onde" rel="noopener">Voir le code sur GitHub</a> · <a href="https://github.com/Sollaxxx/Onde/releases" rel="noopener">Toutes les versions</a></p>
       </div>
     </div>
     <div class="ss" id="smartscreen" aria-labelledby="h-ss">
@@ -573,10 +584,12 @@ footer a:hover{color:var(--ink)}
     libEl.appendChild(row);
     rows.push({ el: row, hay: norm(d.label + ' ' + d.code + ' ' + d.tags) });
     row.querySelector('.play').addEventListener('click', function(e){ e.stopPropagation(); enableSound(); play(k); });
-    row.querySelector('.ins').addEventListener('click', function(e){ e.stopPropagation(); enableSound(); addClip(k, Math.min(t, TL - d.dur)); play(k); });
+    row.querySelector('.ins').addEventListener('click', function(e){ e.stopPropagation(); enableSound(); addClip(k, Math.min(t, TL - d.dur)); play(k); if(touch){ var r = lane.getBoundingClientRect(); if(r.top < 0 || r.bottom > innerHeight) lane.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' }); } });
     row.addEventListener('pointerdown', function(e){ if(e.target.closest('button')) return; startDrag(e, row, k); });
   });
   var q = document.getElementById('q'), empty = document.getElementById('libEmpty');
+  var touch = window.matchMedia('(pointer:coarse)').matches;
+  if(touch){ var lf = document.querySelector('.lib-foot'); if(lf) lf.textContent = 'Touchez ⤓ sur un son pour l’ajouter à la timeline.'; var lh = document.getElementById('hint'); if(lh) lh.textContent = 'Touchez ⤓ sur un son'; }
   q.addEventListener('input', function(){
     var words = norm(q.value).split(/\s+/).filter(Boolean), shown = 0;
     rows.forEach(function(r){ var ok = words.every(function(w){ return r.hay.indexOf(w) !== -1; }); r.el.hidden = !ok; if(ok) shown++; });
