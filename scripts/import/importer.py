@@ -199,7 +199,8 @@ def convert(src: Path, dest_dir: Path, base: str, duration: float) -> tuple[Path
         dest = dest_dir / f"{base}.mp3"
         args = ["-ac", ac, "-ar", "48000", "-c:a", "libmp3lame", "-b:a", "320k" if ac == "2" else "192k"]
         fmt = f"MP3 · {'320' if ac == '2' else '192'} kbps · {layout}"
-    r = subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(src), "-af", filters, *args, str(dest)], capture_output=True, stdin=subprocess.DEVNULL, timeout=300)
+    r = subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(src), "-af", filters, *args, str(dest)], capture_output=True, stdin=subprocess.DEVNULL,
+                       timeout=max(60, duration * 5))  # ffmpeg peut se figer sur un son très pur : on abandonne vite
     if r.returncode != 0 or not dest.exists() or dest.stat().st_size < 512:
         return None
     return dest, fmt
