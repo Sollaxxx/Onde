@@ -1,0 +1,7 @@
+{
+    "name": "onde-resolve",
+    "version": "0.1.0",
+    "description": "Onde panel for DaVinci Resolve Studio",
+    "main": "main.js",
+    "license": "AGPL-3.0-only"
+}

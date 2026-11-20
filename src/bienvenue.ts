@@ -2,6 +2,7 @@
 // Affiché une seule fois ; on peut le revoir depuis les Réglages.
 import type { Theme } from "./types";
 import { MOD } from "./api";
+import { getLang, t } from "./i18n";
 
 export interface Accueil {
   step: number;              // 0 à 3
@@ -11,9 +12,11 @@ export interface Accueil {
 }
 
 export const STEPS = ["Bienvenue", "Dossier des sons", "Logiciels de montage", "C'est prêt"];
+const stepLabel = (s: string) => t(s);
 
 /** Recherches vérifiées sur la bibliothèque : chacune donne des résultats. */
 export const SUGGESTIONS = ["porte qui grince", "whoosh", "orage", "explosion", "applaudissements"];
+const SUGGESTIONS_EN = ["creaking door", "whoosh", "thunder", "explosion", "applause"];
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const ARROW = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>`;
@@ -44,76 +47,76 @@ function panel(step: number, word: string): string {
     ${timeline(step)}
     <ol class="ob-steps">
       ${STEPS.map((label, i) => `<li class="${i === step ? "on" : i < step ? "done" : ""}" ${i === step ? 'aria-current="step"' : ""}>
-        <span class="n">${i < step ? "✓" : String(i + 1).padStart(2, "0")}</span><span>${label}</span></li>`).join("")}
+        <span class="n">${i < step ? "✓" : String(i + 1).padStart(2, "0")}</span><span>${stepLabel(label)}</span></li>`).join("")}
     </ol>
-    <p class="ob-slogan">Gratuit, et ça s'entend.</p>
+    <p class="ob-slogan">${t("Gratuit, et ça s'entend.")}</p>
   </aside>`;
 }
 
-function stepBody(a: Accueil, theme: Theme, premiere: string): string {
+function stepBody(a: Accueil, theme: Theme, premiere: string, resolve: string): string {
   switch (a.step) {
     case 0: {
       const mode = (v: Theme, label: string) => `<button class="ob-mode ${v}" role="radio" aria-checked="${theme === v}" data-act="ob-theme" data-value="${v}">
         <span class="prev" aria-hidden="true"><i></i><i></i><i></i><b></b></span><span>${label}</span></button>`;
-      return `<h1>Bienvenue dans Onde.</h1>
-        <p class="lead">Des bruitages et des musiques libres de droits, à glisser directement dans votre timeline. On règle deux ou trois choses et vous êtes prêt.</p>
-        <div class="ob-pills"><span>GRATUIT</span><span>SANS COMPTE</span><span>SONS CC0</span></div>
-        <p class="ob-label" id="ob-mode-l">Choisissez votre mode</p>
-        <div class="ob-modes" role="radiogroup" aria-labelledby="ob-mode-l">${mode("clair", "Clair")}${mode("sombre", "Sombre")}</div>`;
+      return `<h1>${t("Bienvenue dans Onde.")}</h1>
+        <p class="lead">${t("Des bruitages et des musiques libres de droits, à glisser directement dans votre timeline. On règle deux ou trois choses et vous êtes prêt.")}</p>
+        <div class="ob-pills"><span>${t("GRATUIT")}</span><span>${t("SANS COMPTE")}</span><span>${t("SONS CC0")}</span></div>
+        <p class="ob-label" id="ob-mode-l">${t("Choisissez votre mode")}</p>
+        <div class="ob-modes" role="radiogroup" aria-labelledby="ob-mode-l">${mode("clair", t("Clair"))}${mode("sombre", t("Sombre"))}</div>`;
     }
     case 1:
-      return `<h1>Où ranger vos sons&nbsp;?</h1>
-        <p class="lead">Votre logiciel de montage retrouve les sons par leur emplacement. Choisissez un dossier qui ne bougera pas.</p>
-        <div class="ob-choices" role="radiogroup" aria-label="Dossier des sons">
+      return `<h1>${t("Où ranger vos sons&nbsp;?")}</h1>
+        <p class="lead">${t("Votre logiciel de montage retrouve les sons par leur emplacement. Choisissez un dossier qui ne bougera pas.")}</p>
+        <div class="ob-choices" role="radiogroup" aria-label="${t("Dossier des sons")}">
           <button class="ob-choice" role="radio" aria-checked="${!a.useCustom}" data-act="ob-dir-default">
             <span class="box" aria-hidden="true"></span>
-            <span><span><b>Dossier Onde</b> <em>· recommandé</em></span><span class="mono path">${esc(a.defaultDir)}</span></span>
+            <span><span><b>${t("Dossier Onde")}</b> <em>· ${t("recommandé")}</em></span><span class="mono path">${esc(a.defaultDir)}</span></span>
           </button>
           <button class="ob-choice" role="radio" aria-checked="${a.useCustom}" data-act="ob-dir-pick">
             <span class="box" aria-hidden="true"></span>
-            <span><b>Un autre dossier…</b>${a.customDir ? `<span class="mono path">${esc(a.customDir)}</span>` : `<span class="sub">Un disque externe ou un serveur partagé, par exemple.</span>`}</span>
+            <span><b>${t("Un autre dossier…")}</b>${a.customDir ? `<span class="mono path">${esc(a.customDir)}</span>` : `<span class="sub">${t("Un disque externe ou un serveur partagé, par exemple.")}</span>`}</span>
           </button>
         </div>
-        <p class="ob-note">Rien n'est téléchargé d'avance : un son arrive sur votre disque seulement quand vous l'utilisez. Vous pourrez changer de dossier dans les Réglages.</p>`;
+        <p class="ob-note">${t("Rien n'est téléchargé d'avance : un son arrive sur votre disque seulement quand vous l'utilisez. Vous pourrez changer de dossier dans les Réglages.")}</p>`;
     case 2: {
       const apps: [string, string, string][] = [
-        ["Pr", "Premiere Pro", "Glissez depuis Onde, ou installez le panneau Onde dans Premiere"],
-        ["Dr", "DaVinci Resolve", "Glissez vers la timeline ou le Media Pool"],
-        ["Cc", "CapCut", "Glissez vers le panneau Média ou la piste audio"],
-        ["Av", "Avid Media Composer", "Glissez vers un chutier"],
+        ["Pr", "Premiere Pro", t("Glissez depuis Onde, ou installez le panneau Onde dans Premiere")],
+        ["Dr", "DaVinci Resolve", t("Glissez vers la timeline ou le Media Pool. Avec Resolve Studio, le panneau Onde s'installe aussi dans le logiciel.")],
+        ["Cc", "CapCut", t("Glissez vers le panneau Média ou la piste audio")],
+        ["Av", "Avid Media Composer", t("Glissez vers un chutier")],
       ];
-      return `<h1>Ça marche avec vos logiciels.</h1>
-        <p class="lead">Attrapez un son dans Onde et lâchez-le dans votre logiciel de montage. Pour Premiere, le panneau Onde s'installe aussi directement dans le logiciel.</p>
+      return `<h1>${t("Ça marche avec vos logiciels.")}</h1>
+        <p class="lead">${t("Attrapez un son dans Onde et lâchez-le dans votre logiciel de montage. Pour Premiere et DaVinci Resolve Studio, le panneau Onde s'installe aussi directement dans le logiciel.")}</p>
         <div class="ob-apps">${apps.map(([ini, name, info]) => `<div class="ob-app"><span class="ini" aria-hidden="true">${ini}</span>
-          <span><b>${name}</b><span class="sub">${info}</span></span>${ini === "Pr" ? premiere : `<span class="badge on">PRÊT</span>`}</div>`).join("")}</div>
-        <p class="ob-note">Le panneau Premiere fonctionne avec Premiere Pro 2019 et plus. Vous pourrez l'installer plus tard depuis le bouton Intégrations. DaVinci Resolve arrive bientôt.</p>`;
+          <span><b>${name}</b><span class="sub">${info}</span></span>${ini === "Pr" ? premiere : ini === "Dr" && resolve ? resolve : `<span class="badge on">${t("PRÊT")}</span>`}</div>`).join("")}</div>
+        <p class="ob-note">${t("Le panneau Premiere fonctionne avec Premiere Pro 2019 et plus, le panneau Resolve avec DaVinci Resolve Studio 18 et plus. Vous pourrez les installer plus tard depuis le bouton Intégrations.")}</p>`;
     }
     default:
-      return `<h1>C'est prêt.</h1>
-        <p class="lead">Trois gestes à retenir, et vous ne quitterez plus votre timeline.</p>
+      return `<h1>${t("C'est prêt.")}</h1>
+        <p class="lead">${t("Trois gestes à retenir, et vous ne quitterez plus votre timeline.")}</p>
         <div class="ob-keys">
-          <div><span class="kbd">${MOD} K</span><b>Chercher</b></div>
-          <div><span class="kbd">ESPACE</span><b>Écouter</b></div>
-          <div><span class="kbd">GLISSER</span><b>Insérer</b></div>
+          <div><span class="kbd">${MOD} K</span><b>${t("Chercher")}</b></div>
+          <div><span class="kbd">${t("ESPACE")}</span><b>${t("Écouter")}</b></div>
+          <div><span class="kbd">${t("GLISSER")}</span><b>${t("Insérer")}</b></div>
         </div>
-        <p class="ob-label">Essayez une première recherche</p>
-        <div class="ob-try">${SUGGESTIONS.map((q) => `<button data-act="ob-try" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
+        <p class="ob-label">${t("Essayez une première recherche")}</p>
+        <div class="ob-try">${(getLang() === "en" ? SUGGESTIONS_EN : SUGGESTIONS).map((q) => `<button data-act="ob-try" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>`;
   }
 }
 
-export function accueilScreen(a: Accueil, theme: Theme, word: string, winButtons: string, premiere = ""): string {
+export function accueilScreen(a: Accueil, theme: Theme, word: string, winButtons: string, premiere = "", resolve = ""): string {
   const last = a.step === STEPS.length - 1;
-  const next = a.step === 0 ? "Commencer" : last ? "Ouvrir la bibliothèque" : "Continuer";
+  const next = a.step === 0 ? t("Commencer") : last ? t("Ouvrir la bibliothèque") : t("Continuer");
   return `<div class="ob">
     <div class="ob-bar" data-tauri-drag-region>${winButtons}</div>
     ${panel(a.step, word)}
     <main class="ob-main">
       <div class="ob-content">
-        <p class="eyebrow">Étape ${a.step + 1} sur ${STEPS.length}</p>
-        ${stepBody(a, theme, premiere)}
+        <p class="eyebrow">${t("Étape {i} sur {n}", { i: a.step + 1, n: STEPS.length })}</p>
+        ${stepBody(a, theme, premiere, resolve)}
       </div>
       <footer class="ob-foot">
-        ${a.step === 0 ? `<button class="ob-skip" data-act="ob-skip">Passer la configuration</button>` : `<button class="ob-back" data-act="ob-back">${BACK}Retour</button>`}
+        ${a.step === 0 ? `<button class="ob-skip" data-act="ob-skip">${t("Passer la configuration")}</button>` : `<button class="ob-back" data-act="ob-back">${BACK}${t("Retour")}</button>`}
         <button class="ob-next" data-act="ob-next">${next}${ARROW}</button>
       </footer>
     </main>

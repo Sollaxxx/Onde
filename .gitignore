@@ -5,3 +5,6 @@ src-tauri/gen/
 *.key
 *.key.pub
 .DS_Store
+
+# Module de Blackmagic Design, copié depuis l'installation de Resolve par l'application
+resolve/plugin/WorkflowIntegration.node

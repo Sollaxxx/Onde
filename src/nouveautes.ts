@@ -1,14 +1,19 @@
 // « Nouveautés » : les notes de la version (CHANGELOG.md), montrées une fois après une mise à jour.
-import changelogRaw from "../CHANGELOG.md?raw";
+import changelogFr from "../CHANGELOG.md?raw";
+import changelogEn from "../CHANGELOG.en.md?raw";
+import { getLang } from "./i18n";
 
 // Sur Windows, le fichier peut avoir des fins de ligne \r\n : on les ramène à \n
-const changelog = changelogRaw.replace(/\r\n?/g, "\n");
+const clean = (s: string) => s.replace(/\r\n?/g, "\n");
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const inline = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 
 /** Notes d'une version en HTML (titres ###, listes, gras), ou null si absentes. */
 export function notesHtml(version: string): string | null {
+  // Notes anglaises si l'interface est en anglais et qu'elles existent pour cette version
+  const en = clean(changelogEn);
+  const changelog = getLang() === "en" && en.includes(`\n## ${version}\n`) ? en : clean(changelogFr);
   const head = `\n## ${version}\n`;
   const start = changelog.indexOf(head);
   if (start < 0) return null;

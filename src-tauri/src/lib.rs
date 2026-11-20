@@ -375,6 +375,147 @@ fn install_premiere_panel(app: AppHandle) -> Result<String, String> {
     Ok(panel_version(&dest).unwrap_or_default())
 }
 
+// ---------- Panneau DaVinci Resolve Studio (Workflow Integration) ----------
+
+/// Identifiant du panneau (manifest.xml), et nom de son dossier dans les plugins de Resolve.
+const RESOLVE_PANEL: &str = "com.ondesound.resolve";
+/// Module de Blackmagic qui relie le panneau à Resolve : il n'est pas dans Onde, on le copie depuis Resolve.
+const WORKFLOW_MODULE: &str = "WorkflowIntegration.node";
+
+/// Dossier de Blackmagic où Resolve range ses fichiers communs (plugins, exemples pour développeurs).
+fn resolve_support_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        let base = std::env::var_os("PROGRAMDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("C:\\ProgramData"));
+        return Some(base.join("Blackmagic Design").join("DaVinci Resolve").join("Support"));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return Some(PathBuf::from("/Library/Application Support/Blackmagic Design/DaVinci Resolve"));
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Racine des panneaux (« Workflow Integration Plugins »), d'après la documentation de Blackmagic.
+fn resolve_plugins_dir() -> Option<PathBuf> {
+    resolve_support_dir().map(|d| d.join("Workflow Integration Plugins"))
+}
+
+/// Cherche WorkflowIntegration.node dans les exemples pour développeurs installés avec Resolve
+/// (Developer/Workflow Integrations/Examples/SamplePlugin), en priorité le plus récent (SamplePlugin).
+fn find_workflow_module() -> Option<PathBuf> {
+    let examples = resolve_support_dir()?.join("Developer").join("Workflow Integrations").join("Examples");
+    let preferred = examples.join("SamplePlugin").join(WORKFLOW_MODULE);
+    if preferred.is_file() {
+        return Some(preferred);
+    }
+    fs::read_dir(&examples).ok()?.flatten().map(|e| e.path().join(WORKFLOW_MODULE)).find(|p| p.is_file())
+}
+
+/// Version d'un panneau Resolve, lue dans son manifest.xml (<Version>x.y.z</Version>).
+fn resolve_panel_version(dir: &Path) -> Option<String> {
+    let xml = fs::read_to_string(dir.join("manifest.xml")).ok()?;
+    let start = xml.find("<Version>")? + "<Version>".len();
+    let len = xml[start..].find("</Version>")?;
+    Some(xml[start..start + len].trim().to_string())
+}
+
+#[derive(Serialize)]
+struct ResolveStatus {
+    installed: Option<String>, // version installée
+    bundled: Option<String>,   // version fournie avec cette version d'Onde
+    resolve: bool,             // DaVinci Resolve (avec son module de panneaux) est sur l'ordinateur
+}
+
+#[tauri::command]
+fn resolve_status(app: AppHandle) -> Result<ResolveStatus, String> {
+    let installed = resolve_plugins_dir().and_then(|d| resolve_panel_version(&d.join(RESOLVE_PANEL)));
+    let bundled = resolve_panel_version(&resource(&app, "resolve-plugin")?);
+    Ok(ResolveStatus { installed, bundled, resolve: find_workflow_module().is_some() })
+}
+
+/// Copie `from` dans `to` (remplacé s'il existe), avec les droits d'administrateur si le dossier de Resolve
+/// est protégé (toujours le cas sur Mac). Le système demande alors le mot de passe une fois.
+fn copy_as_admin(from: &Path, to: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let q = |p: &Path| format!("'{}'", p.display().to_string().replace('\'', "'\\''"));
+        let parent = to.parent().ok_or("dossier invalide")?;
+        let shell = format!("mkdir -p {} && rm -rf {} && cp -R {} {}", q(parent), q(to), q(from), q(to));
+        let script = format!("do shell script \"{}\" with administrator privileges", shell.replace('\\', "\\\\").replace('"', "\\\""));
+        let out = std::process::Command::new("osascript").args(["-e", &script]).output().map_err(err)?;
+        if !out.status.success() {
+            return Err("installation annulée".into());
+        }
+        return Ok(());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // robocopy /MIR : copie le dossier et retire les anciens fichiers ; lancé avec « Exécuter en tant qu'administrateur »
+        let ps = |p: &Path| p.display().to_string().replace('\'', "''");
+        let cmd = format!(
+            "Start-Process -FilePath robocopy -ArgumentList @('\"{}\"','\"{}\"','/MIR','/NJH','/NJS','/NP') -Verb RunAs -Wait -WindowStyle Hidden",
+            ps(from), ps(to)
+        );
+        let status = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &cmd])
+            .creation_flags(0x0800_0000) // pas de fenêtre de console
+            .status()
+            .map_err(err)?;
+        if !status.success() || !to.join("manifest.xml").is_file() {
+            return Err("installation annulée".into());
+        }
+        return Ok(());
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = (from, to);
+        Err("installation annulée".into())
+    }
+}
+
+/// Installe (ou met à jour) le panneau Onde dans DaVinci Resolve Studio.
+#[tauri::command]
+fn install_resolve_panel(app: AppHandle) -> Result<String, String> {
+    let src = resource(&app, "resolve-plugin")?;
+    if !src.join("manifest.xml").is_file() {
+        return Err("le panneau n'est pas inclus dans cette version d'Onde".into());
+    }
+    let module = find_workflow_module()
+        .ok_or("DaVinci Resolve n'est pas installé sur cet ordinateur (ou sa version ne gère pas les panneaux).")?;
+    let root = resolve_plugins_dir().ok_or("le panneau n'est pas inclus dans cette version d'Onde")?;
+    let dest = root.join(RESOLVE_PANEL);
+
+    // Le panneau complet est préparé dans un dossier temporaire : panneau d'Onde + module de Resolve
+    let stage = std::env::temp_dir().join(format!("onde-resolve-{}", now_secs()));
+    copy_dir(&src, &stage).map_err(|e| format!("copie impossible : {e}"))?;
+    fs::copy(&module, stage.join(WORKFLOW_MODULE)).map_err(|e| format!("copie impossible : {e}"))?;
+
+    // D'abord sans droits particuliers (souvent possible sur Windows), sinon en administrateur
+    let direct = (|| -> std::io::Result<()> {
+        fs::create_dir_all(&root)?;
+        if dest.exists() {
+            fs::remove_dir_all(&dest)?;
+        }
+        copy_dir(&stage, &dest)
+    })();
+    let result = match direct {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => copy_as_admin(&stage, &dest),
+        Err(e) => Err(format!("ancien panneau impossible à remplacer ({e}). Fermez DaVinci Resolve et réessayez.")),
+    };
+    let _ = fs::remove_dir_all(&stage);
+    result?;
+    // Fenêtre d'administrateur refusée : l'ancien panneau (ou rien) est resté en place
+    let installed = resolve_panel_version(&dest);
+    if installed.is_none() || installed != resolve_panel_version(&src) {
+        return Err("installation annulée".into());
+    }
+    Ok(installed.unwrap_or_default())
+}
+
 // ---------- Contributions de la communauté ----------
 
 /// Les contributions sont-elles ouvertes ? (interrupteur côté serveur ; fermé en cas de doute)
@@ -711,7 +852,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, resolve_status, install_resolve_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }
