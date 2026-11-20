@@ -11,8 +11,12 @@ complète (source, auteur, licence, lien d'origine, empreinte).
 
 Garde-fous : le script s'arrête dès que MAX_SONS ou MAX_OCTETS est atteint.
 
+Doublons : même son exact (empreinte du signal), ou même son ré-encodé ailleurs (même durée
+et même forme d'onde qu'un son déjà dans la bibliothèque en ligne, voir --reference).
+
 Usage :
-  python3 scripts/import/importer.py --sortie /chemin/bibliotheque [--collection URL] [--max-sons 3000]
+  python3 scripts/import/importer.py --sortie /chemin/bibliotheque [--collection URL | --pages liste.json]
+      [--reference v1.json] [--max-sons 3000] [--max-go 2] [--max-par-page 40] [--purger-cache]
 """
 from __future__ import annotations
 
@@ -173,17 +177,28 @@ def peaks_of(path: Path) -> list[float]:
     return [round(v / top, 3) for v in p]
 
 
+def channels(path: Path) -> int:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels", "-of", "csv=p=0", str(path)],
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60)
+    try:
+        return int(out.stdout.strip().split()[0])
+    except (ValueError, IndexError):
+        return 2
+
+
 def convert(src: Path, dest_dir: Path, base: str, duration: float) -> tuple[Path, str] | None:
     short = duration <= COURT_MAX_S
     filters = "silenceremove=start_periods=1:start_threshold=-60dB:start_silence=0.02,loudnorm=I=-18:TP=-1.5:LRA=11"
+    # Un son mono reste mono : deux fois moins lourd, et les logiciels de montage le lisent pareil
+    ac, layout = ("1", "mono") if channels(src) == 1 else ("2", "stéréo")
     if short:
         dest = dest_dir / f"{base}.wav"
-        args = ["-ac", "2", "-ar", "48000", "-c:a", "pcm_s16le"]
-        fmt = "WAV · 48 kHz · 16 bits · stéréo"
+        args = ["-ac", ac, "-ar", "48000", "-c:a", "pcm_s16le"]
+        fmt = f"WAV · 48 kHz · 16 bits · {layout}"
     else:
         dest = dest_dir / f"{base}.mp3"
-        args = ["-ac", "2", "-ar", "48000", "-c:a", "libmp3lame", "-b:a", "320k"]
-        fmt = "MP3 · 320 kbps · stéréo"
+        args = ["-ac", ac, "-ar", "48000", "-c:a", "libmp3lame", "-b:a", "320k" if ac == "2" else "192k"]
+        fmt = f"MP3 · {'320' if ac == '2' else '192'} kbps · {layout}"
     r = subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(src), "-af", filters, *args, str(dest)], capture_output=True, stdin=subprocess.DEVNULL, timeout=300)
     if r.returncode != 0 or not dest.exists() or dest.stat().st_size < 512:
         return None
@@ -194,6 +209,49 @@ def pcm_hash(path: Path) -> str:
     raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-ac", "1", "-ar", "16000", "-f", "s16le", "-"],
                          capture_output=True, stdin=subprocess.DEVNULL, timeout=180).stdout
     return hashlib.sha1(raw).hexdigest()
+
+
+class Doublons:
+    """Repère un son déjà connu sous un autre encodage : durée proche et forme d'onde (120 pics) très corrélée."""
+
+    def __init__(self) -> None:
+        self.by_bucket: dict[int, list[tuple[int, list[float]]]] = {}
+
+    def add(self, duration_ms: int, peaks: list[float]) -> None:
+        if peaks and duration_ms > 0:
+            self.by_bucket.setdefault(duration_ms // 250, []).append((duration_ms, peaks))
+
+    @staticmethod
+    def _corr(a: list[float], b: list[float]) -> float:
+        n = min(len(a), len(b))
+        if n < 8:
+            return 0.0
+        a, b = a[:n], b[:n]
+        ma, mb = sum(a) / n, sum(b) / n
+        va = sum((x - ma) ** 2 for x in a); vb = sum((y - mb) ** 2 for y in b)
+        if va == 0 or vb == 0:
+            return 1.0 if va == vb else 0.0
+        return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / (va * vb) ** 0.5
+
+    @staticmethod
+    def _gap(a: list[float], b: list[float]) -> float:
+        n = min(len(a), len(b))
+        return sum(abs(x - y) for x, y in zip(a[:n], b[:n])) / max(1, n)
+
+    def same(self, d1: int, p1: list[float], d2: int, p2: list[float]) -> bool:
+        if abs(d1 - d2) > max(30, max(d1, d2) * 0.015):
+            return False
+        # Les sons très courts se ressemblent tous un peu à cette résolution : critère plus strict
+        corr, gap = (0.995, 0.02) if max(d1, d2) < 1500 else (0.98, 0.04)
+        return self._gap(p1, p2) <= gap and self._corr(p1, p2) >= corr
+
+    def known(self, duration_ms: int, peaks: list[float]) -> bool:
+        k = duration_ms // 250
+        for bucket in (k - 1, k, k + 1):
+            for d, p in self.by_bucket.get(bucket, []):
+                if self.same(d, p, duration_ms, peaks):
+                    return True
+        return False
 
 
 def collection_nodes(url: str) -> list[str]:
@@ -254,6 +312,10 @@ def main() -> int:
     ap.add_argument("--collection", default="https://opengameart.org/content/cc0-sound-effects")
     ap.add_argument("--max-sons", type=int, default=3000)
     ap.add_argument("--max-go", type=float, default=2.0)
+    ap.add_argument("--pages", type=Path, help="liste JSON d'adresses de pages OpenGameArt (à la place de --collection)")
+    ap.add_argument("--reference", type=Path, action="append", default=[], help="catalogue déjà publié (v1.json) : ses sons comptent comme doublons")
+    ap.add_argument("--max-par-page", type=int, default=0, help="nombre maximum de sons gardés par page (0 : pas de limite)")
+    ap.add_argument("--purger-cache", action="store_true", help="effacer les téléchargements bruts de chaque page une fois traitée")
     args = ap.parse_args()
 
     out_dir: Path = args.sortie
@@ -267,9 +329,20 @@ def main() -> int:
     seen_hash = {s["sha1"] for s in catalog}
     seen_id = {s["id"] for s in catalog}
     total = sum(s["bytes"] for s in catalog)
-    skipped = {"licence": 0, "doublon": 0, "illisible": 0}
+    skipped = {"licence": 0, "doublon": 0, "quasi-doublon": 0, "illisible": 0}
+    similar = Doublons()
+    for s in catalog:
+        similar.add(s["durationMs"], s["peaks"])
+    for ref in args.reference:
+        doc = json.loads(ref.read_text(encoding="utf-8"))
+        for s in (doc["sounds"] if isinstance(doc, dict) else doc):
+            similar.add(s.get("durationMs", 0), s.get("peaks") or [])
+            if s.get("sha1"):
+                seen_hash.add(s["sha1"])
+            seen_id.add(s["id"])
+    log(f"{sum(len(v) for v in similar.by_bucket.values())} sons de référence pour les doublons")
 
-    nodes = collection_nodes(args.collection)
+    nodes = json.loads(args.pages.read_text(encoding="utf-8")) if args.pages else collection_nodes(args.collection)
     log(f"{len(nodes)} pages dans la collection")
     for n, page_url in enumerate(nodes, 1):
         if len(catalog) >= args.max_sons or total >= max_bytes:
@@ -317,6 +390,8 @@ def main() -> int:
 
         jobs = [{"src": p, "rel": rel, "page": page_url, "pack": info, "dest": files_dir, "known": seen_id} for p, rel in best.values()]
         jobs = jobs[: max(0, args.max_sons - len(catalog))]
+        if args.max_par_page:
+            jobs = jobs[: args.max_par_page * 2]  # de la marge pour les doublons écartés
         added = 0
         with cf.ThreadPoolExecutor(max_workers=4) as pool:
             for res in pool.map(process_file, jobs):
@@ -325,14 +400,21 @@ def main() -> int:
                 if not res:
                     skipped["illisible"] += 1
                     continue
-                if res["sha1"] in seen_hash or res["id"] in seen_id or total + res["bytes"] > max_bytes:
-                    skipped["doublon"] += 1
+                full = args.max_par_page and added >= args.max_par_page
+                near = similar.known(res["durationMs"], res["peaks"])
+                if full or near or res["sha1"] in seen_hash or res["id"] in seen_id or total + res["bytes"] > max_bytes:
+                    if near:
+                        skipped["quasi-doublon"] += 1
+                    elif not full:
+                        skipped["doublon"] += 1
                     (files_dir / res["file"]).unlink(missing_ok=True)
                     continue
-                seen_hash.add(res["sha1"]); seen_id.add(res["id"])
+                seen_hash.add(res["sha1"]); seen_id.add(res["id"]); similar.add(res["durationMs"], res["peaks"])
                 catalog.append(res); total += res["bytes"]; added += 1
         log(f"[{n}/{len(nodes)}] +{added} sons · {info['title']} ({info['author']}) · total {len(catalog)} sons, {total/1024**2:.0f} Mo")
         catalog_path.write_text(json.dumps(catalog, ensure_ascii=False, indent=1), encoding="utf-8")
+        if args.purger_cache:
+            shutil.rmtree(pack_dir, ignore_errors=True)
 
     cats: dict[str, int] = {}
     for s in catalog:
