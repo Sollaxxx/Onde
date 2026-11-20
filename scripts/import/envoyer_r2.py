@@ -64,6 +64,8 @@ def main() -> int:
     ap.add_argument("--bucket", default="onde-sons")
     ap.add_argument("--limite", type=int, default=0, help="n'envoyer que N sons (test)")
     ap.add_argument("--sans-catalogue", action="store_true")
+    ap.add_argument("--remplacer", action="store_true",
+                    help="publier seulement ce dossier (+ la communauté) au lieu de l'ajouter au catalogue en ligne")
     ap.add_argument("--cdn", default="https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev",
                     help="adresse publique de la bibliothèque (pour garder les sons de la communauté déjà publiés)")
     args = ap.parse_args()
@@ -99,15 +101,19 @@ def main() -> int:
 
     if not args.sans_catalogue:
         published = [app_entry(s) for s in catalog if s["file"] in sent]
-        # Les sons publiés par la communauté (page de modération) ne sont pas dans ce dossier :
-        # on les reprend du catalogue en ligne pour ne jamais les effacer.
+        # Le catalogue en ligne contient aussi des sons qui ne sont pas dans ce dossier : les autres
+        # imports (BigSoundBank, Kenney…) et les contributions de la communauté. Par défaut on les
+        # garde tous et on ajoute ceux de ce dossier ; --remplacer ne garde que la communauté.
         try:
-            with urllib.request.urlopen(f"{args.cdn}/catalogue/v1.json", timeout=60) as r:
+            req = urllib.request.Request(f"{args.cdn}/catalogue/v1.json?t={int(time.time())}", headers={"User-Agent": "OndeImporter/0.1 (+https://ondesound.com)"})
+            with urllib.request.urlopen(req, timeout=60) as r:
                 online = json.loads(r.read().decode("utf-8"))
             ids = {s["id"] for s in published}
-            community = [s for s in online.get("sounds", []) if s.get("contribution") and s["id"] not in ids]
-            published += community
-            print(f"{len(community)} sons de la communauté conservés", flush=True)
+            kept = [s for s in online.get("sounds", []) if s["id"] not in ids and (s.get("contribution") or not args.remplacer)]
+            if not online.get("sounds"):
+                raise RuntimeError("catalogue en ligne vide")
+            published = kept + published
+            print(f"{len(kept)} sons déjà en ligne conservés, {len(ids)} de ce dossier", flush=True)
         except Exception as e:  # noqa: BLE001
             print(f"Catalogue en ligne illisible ({e}) : publication annulée pour ne pas perdre les contributions.", flush=True)
             return 1
