@@ -1,0 +1,13 @@
+# Sauvegarde nocturne d'Onde. Lancée chaque nuit par une tâche planifiée du NAS :
+#   docker compose -f /chemin/vers/compose.yml run --rm sauvegarde
+services:
+  sauvegarde:
+    build: .
+    image: onde-sauvegarde
+    env_file: .env
+    environment:
+      TZ: Europe/Paris
+    volumes:
+      # À gauche : le dossier partagé du NAS où ranger la sauvegarde (à adapter).
+      - ${DOSSIER_NAS:?indiquez DOSSIER_NAS dans le fichier .env}:/sauvegarde
+    restart: "no"
