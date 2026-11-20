@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+    <title>Onde</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="renderer.js"></script>
+  </head>
+  <body ondragover="return false" ondrop="return false">
+    <header class="top">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"><i></i></span>
+        <b>Onde</b>
+        <span class="tag">BÊTA</span>
+      </div>
+      <span id="count" class="mono muted"></span>
+    </header>
+
+    <div class="search">
+      <input id="q" type="text" placeholder="Décrivez un son : porte, whoosh, pluie…" />
+    </div>
+
+    <div id="list" class="list"></div>
+
+    <footer class="foot">
+      <span id="status" class="muted">Chargement de la bibliothèque…</span>
+    </footer>
+
+    <audio id="player" class="player" preload="none"></audio>
+  </body>
+</html>

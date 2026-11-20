@@ -3,6 +3,7 @@
 // et parle à Premiere via un script ExtendScript (host.jsx).
 import { startPanel, type Host } from "./ui";
 import type { Sound } from "../../src/types";
+import { setLangPref, t } from "../../src/i18n";
 
 declare const require: (m: string) => any;
 declare const process: any;
@@ -20,7 +21,7 @@ const isWin = process.platform === "win32";
 function evalScript(code: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const cep = window.__adobe_cep__;
-    if (!cep) { reject(new Error("panneau ouvert hors de Premiere")); return; }
+    if (!cep) { reject(new Error(t("panneau ouvert hors de Premiere"))); return; }
     cep.evalScript(code, (res: string) => resolve(res));
   });
 }
@@ -33,7 +34,7 @@ function get(url: string, redirects = 3): Promise<any> {
         resolve(get(res.headers.location, redirects - 1));
         return;
       }
-      if (res.statusCode !== 200) { res.resume(); reject(new Error(`réponse ${res.statusCode}`)); return; }
+      if (res.statusCode !== 200) { res.resume(); reject(new Error(t("réponse {code} du serveur", { code: res.statusCode }))); return; }
       resolve(res);
     }).on("error", reject);
   });
@@ -45,6 +46,7 @@ const ERRORS: Record<string, string> = {
   import: "le son n'a pas pu être importé",
   notrack: "aucune piste audio libre à la tête de lecture",
 };
+const errorText = (code: string) => (ERRORS[code] ? t(ERRORS[code]) : code);
 
 function timecode(sec: number): string {
   const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
@@ -117,9 +119,9 @@ const host: Host = {
   async insert(file, durationSec, title) {
     const raw = await evalScript(`ondeInsert(${JSON.stringify(file)}, ${durationSec})`);
     let res: any;
-    try { res = JSON.parse(raw); } catch { throw new Error(raw || "Premiere n'a pas répondu"); }
-    if (!res.ok) throw new Error(ERRORS[res.error] ?? res.error);
-    return `« ${title} » posé sur A${res.track + 1} à ${timecode(res.start)}.`;
+    try { res = JSON.parse(raw); } catch { throw new Error(raw || t("Premiere n'a pas répondu")); }
+    if (!res.ok) throw new Error(errorText(res.error));
+    return t("« {title} » posé sur A{track} à {tc}.", { title, track: res.track + 1, tc: timecode(res.start) });
   },
 
   async markUsed(file) {
@@ -135,5 +137,14 @@ const host: Host = {
   },
 };
 
+/** Langue de Premiere (fr_FR, en_US…) : le panneau parle la même langue que le logiciel. */
+function applyHostLanguage(): void {
+  try {
+    const loc = String(JSON.parse(window.__adobe_cep__.getHostEnvironment()).appUILocale || "");
+    if (loc) setLangPref(loc.toLowerCase().startsWith("fr") ? "fr" : "en", false);
+  } catch { /* langue du système */ }
+}
+
 applyHostTheme();
+applyHostLanguage();
 startPanel(host);

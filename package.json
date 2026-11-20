@@ -7,11 +7,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node premiere/build.mjs && tsc --noEmit && vite build",
+    "build": "node premiere/build.mjs && node resolve/build.mjs && tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "sons": "python3 scripts/generer-sons-test.py",
-    "premiere": "node premiere/build.mjs"
+    "premiere": "node premiere/build.mjs",
+    "resolve": "node resolve/build.mjs",
+    "traductions": "node scripts/verifier-traductions.mjs"
   },
   "dependencies": {
     "@crabnebula/tauri-plugin-drag": "^2.1.0",

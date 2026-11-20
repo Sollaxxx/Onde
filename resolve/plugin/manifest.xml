@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BlackmagicDesign>
+    <Plugin>
+        <Id>com.ondesound.resolve</Id>
+        <Name>Onde</Name>
+        <Version>0.1.0</Version>
+        <Description>Free sound effects: search, listen and drop sounds into your timeline.</Description>
+        <FilePath>main.js</FilePath>
+    </Plugin>
+</BlackmagicDesign>

@@ -1,9 +1,11 @@
-// Interface du panneau Onde pour Premiere Pro, commune aux deux technologies d'Adobe :
+// Interface du panneau Onde, commune à Premiere Pro et DaVinci Resolve :
 //   - CEP (Premiere 2019 → aujourd'hui) : host-cep.ts
 //   - UXP (Premiere 25.6 et plus) : host-uxp.ts
-// Chaque technologie fournit un « Host » : fichiers, réseau, insertion dans la séquence, glisser-déposer.
+//   - DaVinci Resolve Studio (Workflow Integration) : resolve/src/host-resolve.ts
+// Chaque logiciel fournit un « Host » : fichiers, réseau, insertion dans la timeline, glisser-déposer.
 import { formatDuration, search } from "../../src/search";
 import type { Sound } from "../../src/types";
+import { collate, errText, getLang, soundTitle, t, tn } from "../../src/i18n";
 
 export const CDN = "https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev";
 
@@ -23,11 +25,24 @@ export interface Host {
   setDragData(dt: DataTransfer, path: string, sound: Sound): void;
   /** Note que ce son sert dans un montage : l'application Onde ne l'effacera jamais. */
   markUsed(path: string): Promise<void>;
+  /** Message affiché quand on commence à glisser un son. */
+  dropHint?(title: string): string;
+  /** Glisser-déposer natif du système, à la place de setDragData (panneau Electron de Resolve). */
+  startNativeDrag?(path: string): void;
 }
 
 const PAGE = 60;
 
 export function startPanel(host: Host): void {
+  // Textes fixes de la page (index.html), traduits au démarrage
+  document.documentElement.lang = getLang();
+  const q = document.getElementById("q") as HTMLInputElement | null;
+  if (q) q.placeholder = t("Décrivez un son : porte, whoosh, pluie…");
+  const st = document.getElementById("status");
+  if (st) st.textContent = t("Chargement de la bibliothèque…");
+  const tag = document.querySelector(".tag");
+  if (tag) tag.textContent = t("BÊTA");
+
   const state = {
     catalog: [] as Sound[],
     results: [] as Sound[],
@@ -63,7 +78,6 @@ export function startPanel(host: Host): void {
     statusEl.textContent = msg;
     statusEl.parentElement!.className = `foot ${kind}`;
   }
-  const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   function ensureLocal(s: Sound): Promise<string> {
     const known = state.local.get(s.id);
@@ -86,13 +100,13 @@ export function startPanel(host: Host): void {
     state.busy.add(s.id);
     renderList();
     try {
-      status(`Téléchargement de « ${s.title} »…`);
+      status(t("Téléchargement de « {title} »…", { title: soundTitle(s) }));
       const path = await ensureLocal(s);
-      status("Insertion dans la séquence…");
-      status(await host.insert(path, s.durationMs / 1000, s.title), "ok");
+      status(t("Insertion dans la timeline…"));
+      status(await host.insert(path, s.durationMs / 1000, soundTitle(s)), "ok");
       void host.markUsed(path).catch(() => {});
     } catch (e) {
-      status(`Insertion impossible : ${errText(e)}`, "err");
+      status(t("Insertion impossible : {e}", { e: errText(e) }), "err");
     } finally {
       state.busy.delete(s.id);
       renderList();
@@ -108,7 +122,7 @@ export function startPanel(host: Host): void {
       player.src = soundUrl(s);
       state.playingId = s.id;
       const p = player.play() as unknown as Promise<void> | undefined;
-      p?.catch?.(() => { state.playingId = null; status("Pré-écoute indisponible dans cette version de Premiere.", "err"); renderList(); });
+      p?.catch?.(() => { state.playingId = null; status(t("Pré-écoute indisponible dans cette version du logiciel."), "err"); renderList(); });
       void ensureLocal(s).catch(() => {}); // prépare le fichier pour l'insertion ou le glisser
     }
     state.selId = s.id;
@@ -116,7 +130,7 @@ export function startPanel(host: Host): void {
   }
   player.addEventListener("ended", () => { state.playingId = null; renderList(); });
   player.addEventListener("error", () => {
-    if (state.playingId) status("Pré-écoute indisponible pour ce son.", "err");
+    if (state.playingId) status(t("Pré-écoute indisponible pour ce son."), "err");
     state.playingId = null;
     renderList();
   });
@@ -131,9 +145,10 @@ export function startPanel(host: Host): void {
     const s = rowOf(e.target);
     const path = s ? state.local.get(s.id) : undefined;
     if (!s || !path || !e.dataTransfer) { e.preventDefault(); return; }
-    host.setDragData(e.dataTransfer, path, s);
+    if (host.startNativeDrag) { e.preventDefault(); host.startNativeDrag(path); } // glisser géré par le système (Resolve)
+    else host.setDragData(e.dataTransfer, path, s);
     void host.markUsed(path).catch(() => {});
-    status(`Lâchez « ${s.title} » dans la timeline ou le panneau Projet.`);
+    status(host.dropHint ? host.dropHint(soundTitle(s)) : t("Lâchez « {title} » dans la timeline ou le panneau Projet.", { title: soundTitle(s) }));
   });
 
   // Dès qu'on survole un son, on le prépare pour pouvoir le glisser sans attendre.
@@ -158,10 +173,10 @@ export function startPanel(host: Host): void {
   function renderList(): void {
     const list = state.results.slice(0, state.limit);
     if (!list.length) {
-      listEl.innerHTML = `<p class="empty">Aucun son ne correspond. Essayez « porte », « impact » ou « pluie ».</p>`;
+      listEl.innerHTML = `<p class="empty">${t("Aucun son ne correspond. Essayez « porte », « impact » ou « pluie ».")}</p>`;
       return;
     }
-    const hint = host.canDrag ? "Glissez vers la timeline, ou cliquez Insérer" : "Cliquez Insérer pour poser le son à la tête de lecture";
+    const hint = host.canDrag ? t("Glissez vers la timeline, ou cliquez Insérer") : t("Cliquez Insérer pour poser le son à la tête de lecture");
     const rows = list.map((s) => {
       const sel = s.id === state.selId;
       const playing = s.id === state.playingId;
@@ -169,13 +184,13 @@ export function startPanel(host: Host): void {
       const busy = state.busy.has(s.id);
       return `<div class="row${sel ? " sel" : ""}${ready ? " ready" : ""}" data-id="${s.id}" draggable="${ready}" title="${hint}">
         <button class="play${playing ? " on" : ""}" data-act="play">${playing ? "❚❚" : "▶"}</button>
-        <div class="info"><b>${esc(s.title)}</b><span>${esc(s.code)} · ${esc(s.tags.slice(0, 4).join(" · "))}</span></div>
+        <div class="info"><b>${esc(soundTitle(s))}</b><span>${esc(s.code)} · ${esc(s.tags.slice(0, 4).join(" · "))}</span></div>
         <div class="wave">${waveBars(s.peaks)}</div>
         <span class="dur mono muted">${formatDuration(s.durationMs)}</span>
-        <button class="ins" data-act="insert" ${busy ? "disabled" : ""}>${busy ? "…" : "Insérer"}</button>
+        <button class="ins" data-act="insert" ${busy ? "disabled" : ""}>${busy ? "…" : t("Insérer")}</button>
       </div>`;
     }).join("");
-    const more = state.results.length > state.limit ? `<button class="more" data-act="more">Afficher plus (${state.results.length - state.limit})</button>` : "";
+    const more = state.results.length > state.limit ? `<button class="more" data-act="more">${t("Afficher plus ({n})", { n: state.results.length - state.limit })}</button>` : "";
     const top = listEl.scrollTop;
     listEl.innerHTML = rows + more;
     listEl.scrollTop = top;
@@ -184,7 +199,7 @@ export function startPanel(host: Host): void {
   function runSearch(q: string): void {
     state.results = search(state.catalog, q);
     state.limit = PAGE;
-    $("count").textContent = `${state.results.length} SONS`;
+    $("count").textContent = tn(state.results.length, "{n} SON", "{n} SONS");
     listEl.scrollTop = 0;
     renderList();
   }
@@ -215,11 +230,11 @@ export function startPanel(host: Host): void {
     try {
       state.libDir = await host.libraryDir();
       const data = await host.getJson(`${CDN}/catalogue/v1.json`);
-      state.catalog = (data.sounds as Sound[]).sort((a, b) => a.title.localeCompare(b.title, "fr"));
+      state.catalog = (data.sounds as Sound[]).sort((a, b) => collate(soundTitle(a), soundTitle(b)));
       runSearch("");
-      status(host.canDrag ? "Glissez un son vers la timeline, ou cliquez Insérer." : "Cliquez Insérer pour poser un son à la tête de lecture.");
+      status(host.canDrag ? t("Glissez un son vers la timeline, ou cliquez Insérer.") : t("Cliquez Insérer pour poser un son à la tête de lecture."));
     } catch (e) {
-      status(`Impossible de charger la bibliothèque : ${errText(e)}`, "err");
+      status(t("Impossible de charger la bibliothèque : {e}", { e: errText(e) }), "err");
     }
   })();
 }

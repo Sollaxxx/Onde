@@ -149,6 +149,19 @@ export async function installPremierePanel(): Promise<string> {
   throw new Error("l'installation se fait depuis l'application Onde");
 }
 
+/** Panneau DaVinci Resolve : versions, et présence de Resolve sur l'ordinateur. */
+export interface ResolveStatus extends PanelStatus { resolve: boolean }
+
+export async function resolveStatus(): Promise<ResolveStatus> {
+  return inTauri ? invoke<ResolveStatus>("resolve_status") : { installed: null, bundled: "0.1.0", resolve: true };
+}
+
+/** Installe (ou met à jour) le panneau Onde dans DaVinci Resolve Studio et renvoie sa version. */
+export async function installResolvePanel(): Promise<string> {
+  if (inTauri) return invoke<string>("install_resolve_panel");
+  throw new Error("l'installation se fait depuis l'application Onde");
+}
+
 // ---------- Contributions de la communauté ----------
 
 /** Les contributions sont-elles ouvertes ? (interrupteur côté serveur) */

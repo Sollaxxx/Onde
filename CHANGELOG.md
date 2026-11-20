@@ -2,6 +2,15 @@
 
 Chaque version commence par une phrase de résumé : c'est elle qui s'affiche dans le bandeau de mise à jour.
 
+## 0.5.0
+
+Onde parle anglais, et arrive dans DaVinci Resolve.
+
+### Nouveautés
+- **Interface en anglais** : Onde suit la langue de l'ordinateur. On peut la changer dans Réglages → Apparence → Langue (Français, English, ou comme le système). En anglais, les sons, leurs descriptions et les catégories s'affichent aussi en anglais.
+- **Panneau DaVinci Resolve Studio** : chercher, écouter et poser les sons sans quitter Resolve. **Insérer** pose le son à la tête de lecture, sur une piste audio libre, et le range dans un chutier « Onde ». On peut aussi glisser un son vers la timeline ou le Media Pool. Installation en un clic depuis le bouton Intégrations, puis Espace de travail → Intégrations de workflow → Onde. Le panneau demande la version Studio de Resolve : avec la version gratuite, le glisser-déposer depuis l'application fonctionne comme avant.
+- Le panneau Premiere parle aussi anglais quand Premiere est en anglais.
+
 ## 0.4.0
 
 Vos propres sons dans Onde, des playlists et une navigation plus claire.

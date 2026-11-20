@@ -1,5 +1,6 @@
 // Panneau Onde, version UXP : Premiere Pro 25.6 et plus.
 // Gardée pour l'avenir (Adobe remplacera un jour CEP par UXP). Glisser-déposer : Premiere 27 et plus.
+import { t } from "../../src/i18n";
 import { startPanel, type Host } from "./ui";
 
 declare const require: (m: string) => any;
@@ -104,7 +105,7 @@ const host: Host = {
 
   async getJson(url) {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`réponse ${res.status}`);
+    if (!res.ok) throw new Error(t("réponse {code} du serveur", { code: res.status }));
     return res.json();
   },
 
@@ -112,7 +113,7 @@ const host: Host = {
     if (await exists(dest)) return;
     await fs.mkdir(dest.slice(0, dest.lastIndexOf(SEP)), { recursive: true }).catch(() => 0);
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`téléchargement impossible (${res.status})`);
+    if (!res.ok) throw new Error(t("téléchargement impossible ({code})", { code: res.status }));
     const part = `${dest}.part`;
     await fs.writeFile(part, await res.arrayBuffer());
     await fs.rename(part, dest);
@@ -120,16 +121,16 @@ const host: Host = {
 
   async insert(path, durationSec, title) {
     const project = await ppro.Project.getActiveProject();
-    if (!project) throw new Error("ouvrez d'abord un projet");
+    if (!project) throw new Error(t("ouvrez d'abord un projet"));
     const seq = await project.getActiveSequence();
-    if (!seq) throw new Error("ouvrez une séquence dans la timeline");
+    if (!seq) throw new Error(t("ouvrez une séquence dans la timeline"));
     const bin = await findOrCreateBin(project);
     let clip = await findClip(bin, path);
     if (!clip) {
       await project.importFiles([path], true, bin, false);
       clip = await findClip(bin, path);
     }
-    if (!clip) throw new Error("le son n'a pas pu être importé");
+    if (!clip) throw new Error(t("le son n'a pas pu être importé"));
     const pos = await seq.getPlayerPosition();
     const start = pos.seconds;
     const track = await freeAudioTrack(seq, start, start + durationSec);
@@ -138,8 +139,8 @@ const host: Host = {
     project.lockedAccess(() => {
       ok = project.executeTransaction((ca: any) => ca.addAction(editor.createOverwriteItemAction(clip, pos, 0, track)), `Onde : ${title}`);
     });
-    if (!ok) throw new Error("Premiere a refusé l'insertion");
-    return `« ${title} » posé sur A${track + 1} à ${timecode(start)}.`;
+    if (!ok) throw new Error(t("Premiere a refusé l'insertion"));
+    return t("« {title} » posé sur A{track} à {tc}.", { title, track: track + 1, tc: timecode(start) });
   },
 
   async markUsed(path) {
