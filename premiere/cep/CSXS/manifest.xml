@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Panneau Onde pour Premiere Pro, version CEP : Premiere 2019 (13.0) et plus. -->
-<ExtensionManifest Version="7.0" ExtensionBundleId="app.onde.premiere" ExtensionBundleVersion="0.1.0"
+<ExtensionManifest Version="7.0" ExtensionBundleId="app.onde.premiere" ExtensionBundleVersion="0.2.0"
   ExtensionBundleName="Onde" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="app.onde.premiere.panel" Version="0.1.0" />
+    <Extension Id="app.onde.premiere.panel" Version="0.2.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
