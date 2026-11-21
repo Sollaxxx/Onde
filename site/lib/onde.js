@@ -40,10 +40,9 @@ export async function sha(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Accès à la modération : mot de passe défini dans les variables secrètes du projet Pages. */
-export function checkModerator(request, env) {
-  const secret = env.MODERATION_MOT_DE_PASSE;
-  if (!secret) return new Response("Modération non configurée : ajoutez la variable secrète MODERATION_MOT_DE_PASSE.", { status: 503 });
+/** Accès protégé par un mot de passe défini dans les variables secrètes du projet Pages (authentification « Basic »). */
+export function checkSecret(request, secret, { missing, denied, realm }) {
+  if (!secret) return new Response(missing, { status: 503 });
   const auth = request.headers.get("Authorization") || "";
   let pass = "";
   if (auth.startsWith("Basic ")) {
@@ -53,12 +52,30 @@ export function checkModerator(request, env) {
   let diff = pass.length ^ secret.length;
   for (let i = 0; i < Math.max(pass.length, secret.length); i++) diff |= (pass.charCodeAt(i) || 0) ^ (secret.charCodeAt(i) || 0);
   if (diff !== 0) {
-    return new Response("Accès réservé à la modération d'Onde.", {
+    return new Response(denied, {
       status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="Moderation Onde", charset="UTF-8"', "Cache-Control": "no-store" },
+      headers: { "WWW-Authenticate": `Basic realm="${realm}", charset="UTF-8"`, "Cache-Control": "no-store" },
     });
   }
   return null;
+}
+
+/** Accès à la modération (variable secrète MODERATION_MOT_DE_PASSE). */
+export function checkModerator(request, env) {
+  return checkSecret(request, env.MODERATION_MOT_DE_PASSE, {
+    missing: "Modération non configurée : ajoutez la variable secrète MODERATION_MOT_DE_PASSE.",
+    denied: "Accès réservé à la modération d'Onde.",
+    realm: "Moderation Onde",
+  });
+}
+
+/** Accès à l'administration des équipes (variable secrète ADMIN_MOT_DE_PASSE, distincte de la modération). */
+export function checkAdmin(request, env) {
+  return checkSecret(request, env.ADMIN_MOT_DE_PASSE, {
+    missing: "Administration non configurée : ajoutez la variable secrète ADMIN_MOT_DE_PASSE.",
+    denied: "Accès réservé à l'administration d'Onde.",
+    realm: "Admin Onde",
+  });
 }
 
 /** Type audio d'après les premiers octets du fichier (on ne se fie pas à l'extension). */

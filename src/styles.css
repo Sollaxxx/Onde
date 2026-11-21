@@ -446,3 +446,31 @@ button { cursor: pointer; }
 .set-dirs .dirs { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
 .set-dirs .dirs li { display: flex; align-items: center; gap: 12px; justify-content: space-between; border: 1px solid var(--line); padding: 6px 10px; }
 .set-dirs .dirs .path { overflow-wrap: anywhere; font-size: 12px; }
+
+/* ---------- Réglages : compte et équipe (Onde Équipe) ---------- */
+.ac { display: flex; flex-direction: column; }
+.ac-fields { display: flex; gap: 8px; flex-wrap: wrap; flex: 1 1 320px; max-width: 420px; justify-content: flex-end; }
+.ac-fields input, .ac-invite input { flex: 1 1 200px; min-width: 0; min-height: 40px; font: 400 14px/1.4 var(--f-text); color: var(--ink); background: var(--bg); border: 1px solid var(--line-strong); padding: 8px 12px; user-select: text; }
+.ac-fields input:focus, .ac-invite input:focus { outline: none; border-color: var(--blue); }
+.ac-fields input:disabled, .ac-invite input:disabled { opacity: 0.5; }
+.ac-code { font-family: var(--f-mono) !important; font-size: 18px !important; letter-spacing: 0.3em; max-width: 160px; }
+.ac-links { padding: 10px 0 0; gap: 18px; }
+.ac-err { padding-top: 10px; }
+.ac-received { background: var(--sel); padding: 16px; border-bottom: 0; margin-top: 12px; }
+.ac-team { border: 1px solid var(--line-strong); padding: 16px; margin-top: 14px; display: grid; gap: 12px; }
+.ac-team-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
+.ac-team-head > div { display: grid; gap: 3px; min-width: 0; }
+.ac-team-head b { font: 700 18px/1.2 var(--f-display); }
+.ac-team-head span { font-size: 13px; color: var(--muted); }
+.ac-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.ac-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 9px 0; border-top: 1px solid var(--line); }
+.ac-who { display: grid; flex: 1 1 220px; min-width: 0; }
+.ac-who b { font-weight: 600; overflow-wrap: anywhere; }
+.ac-who span { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.ac-role { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
+.ac-list .btns { gap: 14px; }
+.link-btn.danger { color: var(--red); }
+.link-btn:disabled { opacity: 0.5; }
+.ac-invite { display: flex; gap: 8px; flex-wrap: wrap; }
+.secondary:disabled { opacity: 0.45; cursor: default; }
+.secondary:disabled:hover { border-color: var(--line-strong); }

@@ -2,6 +2,7 @@
 // Hors de Tauri (simple navigateur, pour tester l'interface), on lit les sons
 // de test servis par Vite et les fonctions natives sont désactivées.
 import type { Catalog, Sound, UpdateInfo } from "./types";
+import { getLang } from "./i18n";
 
 export const inTauri = "__TAURI_INTERNALS__" in window;
 /** Onde tourne sur un Mac (feux tricolores d'Apple, raccourcis avec ⌘). */
@@ -160,6 +161,50 @@ export async function resolveStatus(): Promise<ResolveStatus> {
 export async function installResolvePanel(): Promise<string> {
   if (inTauri) return invoke<string>("install_resolve_panel");
   throw new Error("l'installation se fait depuis l'application Onde");
+}
+
+// ---------- Compte et équipe (Onde Équipe) ----------
+// Dans l'application, les appels passent par Rust, qui garde le jeton de session (l'interface ne le voit pas).
+// Dans un navigateur (test de l'interface), ils vont au serveur de test local : node site/serveur-local.mjs
+const DEV_API = "http://localhost:8787";
+const DEV_TOKEN = "onde.dev.session";
+
+export interface AccountError extends Error { code?: string; status?: number }
+
+export async function accountApi(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<any> {
+  const lang = getLang();
+  let v: any;
+  if (inTauri) {
+    v = await invoke("account_api", { method, path, body: body ?? null, lang });
+  } else {
+    const token = localStorage.getItem(DEV_TOKEN);
+    try {
+      const r = await fetch(`${DEV_API}/api/${path}`, {
+        method,
+        headers: { "Content-Type": "application/json", "X-Onde-Langue": lang, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      v = { ...(await r.json().catch(() => ({ ok: false, error: "Réponse illisible du serveur Onde." }))), status: r.status };
+    } catch {
+      v = { ok: false, error: "Pas de connexion au serveur Onde.", status: 0 };
+    }
+    if (v.ok && path === "compte/connexion" && v.token) { localStorage.setItem(DEV_TOKEN, v.token); delete v.token; }
+    if ((v.ok && (path === "compte/deconnexion" || path === "compte/supprimer")) || (v.status === 401 && path !== "compte/connexion")) localStorage.removeItem(DEV_TOKEN);
+  }
+  if (!v?.ok) throw Object.assign(new Error(v?.error || "Erreur du serveur Onde."), { code: v?.code, status: v?.status }) as AccountError;
+  return v;
+}
+
+/** Les comptes (Onde Équipe) sont-ils ouverts côté serveur ? Dans un navigateur de test : toujours. */
+export async function accountsOpen(): Promise<boolean> {
+  if (inTauri) return invoke<boolean>("accounts_open").catch(() => false);
+  return true;
+}
+
+/** Une session est-elle enregistrée sur cet ordinateur ? */
+export async function accountSignedIn(): Promise<boolean> {
+  if (inTauri) return invoke<boolean>("account_signed_in");
+  return !!localStorage.getItem(DEV_TOKEN);
 }
 
 // ---------- Contributions de la communauté ----------

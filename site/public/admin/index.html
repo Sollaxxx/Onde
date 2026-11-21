@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin Onde</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+:root{--bg:#fbfbf9;--surface:#fff;--ink:#0d0d0f;--ink-2:#3e3e44;--muted:#66666d;--line:#e6e6e2;--line-strong:#d2d2cd;--blue:#002fa7;--blue-ink:#fff;--red:#e2231a;--ok:#1b7a43;--warn:#a15c00;--sel:#edf1fb}
+@media (prefers-color-scheme: dark){:root{--bg:#0e0f12;--surface:#16171c;--ink:#f2f2ef;--ink-2:#c9cad0;--muted:#9c9ea7;--line:#272932;--line-strong:#363945;--blue:#7d96ff;--blue-ink:#0e0f12;--sel:#1a2142;--ok:#5fd394;--warn:#f0b35a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Funnel Sans",system-ui,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 16px 80px}
+h1{font:800 40px/1 "Funnel Display",sans-serif;letter-spacing:-.03em;margin:0 0 6px}
+h2{font:700 20px/1.2 "Funnel Display",sans-serif;margin:0}
+.mono{font:500 11px/1.4 "Martian Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:24px}
+.card{border:1px solid var(--line-strong);background:var(--surface);padding:18px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+label{display:grid;gap:4px;font-size:13px;font-weight:600}
+label.wide{grid-column:1/-1}
+input,select,textarea{font:400 14px/1.4 "Funnel Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg);border:1px solid var(--line-strong);padding:8px 10px;width:100%;min-width:0}
+textarea{min-height:60px;resize:vertical}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+button.b{min-height:40px;padding:0 16px;border:1px solid var(--ink);background:transparent;color:var(--ink);font:600 14px "Funnel Sans",system-ui,sans-serif;cursor:pointer}
+button.pri{background:var(--blue);color:var(--blue-ink);border-color:var(--blue)}
+button.dan:hover{border-color:var(--red);color:var(--red)}
+button.sm{min-height:32px;padding:0 10px;font-size:13px}
+button:disabled{opacity:.5;cursor:default}
+.state{font-size:13px;color:var(--muted)}
+.state.err{color:var(--red)}.state.ok{color:var(--ok)}
+.team{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.team .name{flex:1 1 220px;min-width:0}
+.team .name b{font-size:17px}
+.badge{display:inline-block;font:500 11px/1 "Martian Mono",monospace;letter-spacing:.04em;text-transform:uppercase;padding:5px 7px;border:1px solid var(--line-strong);color:var(--ink-2)}
+.badge.actif{border-color:var(--ok);color:var(--ok)}
+.badge.essai{border-color:var(--blue);color:var(--blue)}
+.badge.fini,.badge.suspendu{border-color:var(--red);color:var(--red)}
+.facts{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--ink-2)}
+.detail{border-top:1px solid var(--line);margin-top:16px;padding-top:16px;display:grid;gap:18px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:500 11px/1.4 "Martian Mono",monospace;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500}
+td select{width:auto}
+.tablewrap{overflow-x:auto}
+.empty{color:var(--muted);padding:12px 0}
+.help{background:var(--sel);padding:14px 16px;font-size:13.5px;color:var(--ink-2);margin-bottom:22px}
+.inline{display:flex;flex-wrap:wrap;gap:8px}
+.inline input{flex:1 1 220px;width:auto}
+.inline select{width:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><p class="mono">Onde · administration</p><h1>Équipes</h1><p class="state" id="stats">Chargement…</p></div>
+  </div>
+  <p class="help">Onde Équipe est sur demande : quand un studio vous écrit, créez son équipe ici avec son forfait. Le propriétaire reçoit une invitation par e-mail, se connecte dans Onde (Réglages → Compte) avec cette adresse, puis invite lui-même ses membres, dans la limite des places. L'essai gratuit dure 30 jours par défaut ; passez l'équipe en « Actif » quand elle paie.</p>
+
+  <form class="card" id="create">
+    <h2 style="margin-bottom:14px">Nouvelle équipe</h2>
+    <div class="grid">
+      <label>Nom de l'équipe<input name="name" required maxlength="60" placeholder="Studio Alpha"></label>
+      <label>Forfait<select name="plan" id="plan"></select></label>
+      <label>Places<input name="seats" type="number" min="1" max="500"></label>
+      <label>Stockage (Go)<input name="storageGb" type="number" min="1" max="5000"></label>
+      <label>Statut<select name="status"><option value="essai">Essai gratuit</option><option value="actif">Actif (payé)</option></select></label>
+      <label>Durée de l'essai (jours)<input name="trialDays" type="number" min="1" max="365" value="30"></label>
+      <label>E-mail du propriétaire<input name="ownerEmail" type="email" required placeholder="contact@studio.fr"></label>
+      <label>Langue de l'e-mail<select name="lang"><option value="fr">Français</option><option value="en">English</option></select></label>
+      <label class="wide">Note (interne, jamais montrée au client)<textarea name="note" maxlength="1000" placeholder="Prix convenu, contact, date de relance…"></textarea></label>
+    </div>
+    <div class="actions"><button class="b pri" type="submit">Créer et envoyer l'invitation</button><span class="state" id="createState"></span></div>
+  </form>
+
+  <div id="list"></div>
+</div>
+<script>
+(function(){
+  var plans = {}, open = {};
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = function(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
+  var day = function(d){ return d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : ""; };
+  var dateInput = function(d){ return d ? new Date(d).toISOString().slice(0, 10) : ""; };
+
+  function api(path, method, data){
+    return fetch("/api/admin/" + path, { method: method || "GET", headers: data ? { "Content-Type": "application/json" } : {}, body: data ? JSON.stringify(data) : undefined })
+      .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ if(!r.ok || !j.ok) throw new Error(j.error || ("erreur " + r.status)); return j; }); });
+  }
+
+  function statusBadge(t){
+    if (t.status === "essai") return t.active ? '<span class="badge essai">Essai · jusqu\'au ' + esc(day(t.trialUntil)) + '</span>' : '<span class="badge fini">Essai terminé</span>';
+    return '<span class="badge ' + esc(t.status) + '">' + (t.status === "actif" ? "Actif" : "Suspendu") + '</span>';
+  }
+
+  function planOptions(sel){
+    return Object.keys(plans).map(function(k){ var p = plans[k]; return '<option value="' + k + '"' + (k === sel ? " selected" : "") + '>' + esc(p.nom) + (p.prixMois ? " · " + p.prixMois + " €/mois" : " · sur devis") + '</option>'; }).join("");
+  }
+
+  function detail(t){
+    var members = t.members.length ? '<div class="tablewrap"><table><tr><th>Membre</th><th>Rôle</th><th>Depuis</th><th></th></tr>' + t.members.map(function(m){
+      return '<tr><td>' + esc(m.name ? m.name + " · " : "") + esc(m.email) + '</td><td><select data-role="' + m.id + '"><option value="membre"' + (m.role === "membre" ? " selected" : "") + '>Membre</option><option value="proprietaire"' + (m.role === "proprietaire" ? " selected" : "") + '>Propriétaire</option></select></td><td>' + esc(day(m.joinedAt)) + '</td><td><button class="b sm dan" data-remove="' + m.id + '" type="button">Retirer</button></td></tr>';
+    }).join("") + '</table></div>' : '<p class="empty">Aucun membre pour l\'instant.</p>';
+    var invites = t.invitations.length ? '<div class="tablewrap"><table><tr><th>Invitation en attente</th><th>Rôle</th><th>Expire le</th><th></th></tr>' + t.invitations.map(function(i){
+      return '<tr><td>' + esc(i.email) + '</td><td>' + (i.role === "proprietaire" ? "Propriétaire" : "Membre") + '</td><td>' + esc(day(i.expiresAt)) + '</td><td><button class="b sm" data-resend="' + esc(i.email) + '" data-resend-role="' + i.role + '" type="button">Renvoyer</button> <button class="b sm dan" data-cancel="' + i.id + '" type="button">Annuler</button></td></tr>';
+    }).join("") + '</table></div>' : "";
+    return '<div class="detail">' +
+      '<div class="grid">' +
+        '<label>Nom<input data-f="name" value="' + esc(t.name) + '" maxlength="60"></label>' +
+        '<label>Forfait<select data-f="plan">' + planOptions(t.plan) + '</select></label>' +
+        '<label>Places<input data-f="seats" type="number" min="1" max="500" value="' + t.seats + '"></label>' +
+        '<label>Stockage (Go)<input data-f="storageGb" type="number" min="1" max="5000" value="' + t.storageGb + '"></label>' +
+        '<label>Statut<select data-f="status">' + [["essai", "Essai gratuit"], ["actif", "Actif (payé)"], ["suspendu", "Suspendu"]].map(function(s){ return '<option value="' + s[0] + '"' + (s[0] === t.status ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select></label>' +
+        '<label>Fin de l\'essai<input data-f="trialUntil" type="date" value="' + dateInput(t.trialUntil) + '"></label>' +
+        '<label class="wide">Note interne<textarea data-f="note" maxlength="1000">' + esc(t.note) + '</textarea></label>' +
+      '</div>' +
+      '<div class="actions" style="margin-top:0"><button class="b pri" data-save type="button">Enregistrer</button><span class="state" data-state></span></div>' +
+      members + invites +
+      '<div class="inline"><input data-invite type="email" placeholder="E-mail à inviter"><select data-invite-role><option value="membre">Membre</option><option value="proprietaire">Propriétaire</option></select><button class="b" data-send type="button">Inviter</button></div>' +
+      '<div><button class="b dan" data-delete type="button">Supprimer l\'équipe</button></div>' +
+    '</div>';
+  }
+
+  function render(teams){
+    if (!teams.length) { $("list").innerHTML = '<p class="empty">Aucune équipe pour l\'instant.</p>'; return; }
+    $("list").innerHTML = teams.map(function(t){
+      return '<section class="card" data-team="' + t.id + '">' +
+        '<div class="team"><div class="name"><b>' + esc(t.name) + '</b><div class="facts"><span>' + esc(t.planName) + '</span><span>' + t.seatsUsed + ' / ' + t.seats + ' places</span><span>' + t.storageGb + ' Go</span><span>Créée le ' + esc(day(t.createdAt)) + '</span></div>' +
+        '<div class="facts">' + (t.owners.length ? "Propriétaire : " + esc(t.owners.join(", ")) : "Pas encore de propriétaire") + '</div></div>' +
+        statusBadge(t) + '<button class="b sm" data-toggle type="button">' + (open[t.id] ? "Fermer" : "Gérer") + '</button></div>' +
+        (open[t.id] ? detail(t) : "") +
+      '</section>';
+    }).join("");
+  }
+
+  function load(){
+    return api("equipes").then(function(j){
+      plans = j.plans;
+      if (!$("plan").options.length) { $("plan").innerHTML = planOptions("studio"); fillPlan(); }
+      $("stats").textContent = j.stats.teams + " équipe" + (j.stats.teams > 1 ? "s" : "") + " · " + j.stats.active + " active" + (j.stats.active > 1 ? "s" : "") + " · " + j.stats.accounts + " compte" + (j.stats.accounts > 1 ? "s" : "") + " Onde";
+      render(j.teams);
+    }).catch(function(e){ $("stats").textContent = e.message; $("stats").className = "state err"; });
+  }
+
+  function fillPlan(){
+    var p = plans[$("plan").value]; if (!p) return;
+    $("create").seats.value = p.places; $("create").storageGb.value = p.stockageGo;
+  }
+  $("plan").addEventListener("change", fillPlan);
+
+  $("create").addEventListener("submit", function(e){
+    e.preventDefault();
+    var f = e.target, st = $("createState");
+    var data = { name: f.name.value, plan: f.plan.value, seats: +f.seats.value, storageGb: +f.storageGb.value, status: f.status.value, trialDays: +f.trialDays.value, ownerEmail: f.ownerEmail.value, lang: f.lang.value, note: f.note.value };
+    st.className = "state"; st.textContent = "Création…";
+    api("equipes", "POST", data).then(function(j){
+      st.className = "state ok";
+      st.textContent = "Équipe créée. " + (j.emailSent ? "Invitation envoyée à " + data.ownerEmail + "." : "L'e-mail n'a pas pu partir : dites au propriétaire de se connecter dans Onde avec " + data.ownerEmail + ".");
+      f.reset(); f.trialDays.value = 30; $("plan").value = "studio"; fillPlan();
+      open[j.team.id] = true; load();
+    }).catch(function(err){ st.className = "state err"; st.textContent = err.message; });
+  });
+
+  $("list").addEventListener("click", function(e){
+    var card = e.target.closest("[data-team]"); if (!card) return;
+    var id = card.getAttribute("data-team"), t = e.target, st = card.querySelector("[data-state]");
+    var done = function(){ return load(); }, oops = function(err){ if (st) { st.className = "state err"; st.textContent = err.message; } else alert(err.message); };
+    if (t.hasAttribute("data-toggle")) { open[id] = !open[id]; load(); return; }
+    if (t.hasAttribute("data-save")) {
+      var v = function(n){ return card.querySelector('[data-f="' + n + '"]').value; };
+      api("equipes/" + id, "POST", { name: v("name"), plan: v("plan"), seats: +v("seats"), storageGb: +v("storageGb"), status: v("status"), trialUntil: v("trialUntil") ? v("trialUntil") + "T23:59:59Z" : null, note: v("note") })
+        .then(done).catch(oops);
+      return;
+    }
+    if (t.hasAttribute("data-remove")) { if (confirm("Retirer ce membre de l'équipe ?")) api("equipes/" + id + "/membres/" + t.getAttribute("data-remove"), "DELETE").then(done).catch(oops); return; }
+    if (t.hasAttribute("data-cancel")) { api("equipes/" + id + "/invitations/" + t.getAttribute("data-cancel"), "DELETE").then(done).catch(oops); return; }
+    if (t.hasAttribute("data-resend")) { api("equipes/" + id + "/invitations", "POST", { email: t.getAttribute("data-resend"), role: t.getAttribute("data-resend-role") }).then(function(j){ alert(j.emailSent ? "Invitation renvoyée." : "L'e-mail n'a pas pu partir."); return done(); }).catch(oops); return; }
+    if (t.hasAttribute("data-send")) {
+      var email = card.querySelector("[data-invite]").value, role = card.querySelector("[data-invite-role]").value;
+      api("equipes/" + id + "/invitations", "POST", { email: email, role: role }).then(function(j){ if (!j.emailSent) alert("Invitation créée, mais l'e-mail n'a pas pu partir."); return done(); }).catch(oops);
+      return;
+    }
+    if (t.hasAttribute("data-delete")) { if (confirm("Supprimer définitivement cette équipe ? Ses membres en sont retirés.")) { delete open[id]; api("equipes/" + id, "DELETE").then(done).catch(oops); } }
+  });
+
+  $("list").addEventListener("change", function(e){
+    var sel = e.target; if (!sel.hasAttribute("data-role")) return;
+    var id = sel.closest("[data-team]").getAttribute("data-team");
+    api("equipes/" + id + "/membres/" + sel.getAttribute("data-role"), "POST", { role: sel.value }).then(load).catch(function(err){ alert(err.message); load(); });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
