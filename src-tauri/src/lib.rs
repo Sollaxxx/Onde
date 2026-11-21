@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+mod compte;
 mod perso;
 
 use std::collections::HashMap;
@@ -521,13 +522,24 @@ fn install_resolve_panel(app: AppHandle) -> Result<String, String> {
 /// Les contributions sont-elles ouvertes ? (interrupteur côté serveur ; fermé en cas de doute)
 #[tauri::command]
 async fn contributions_open() -> bool {
+    site_switch("contributions").await
+}
+
+/// Un interrupteur de /api/config (fermé en cas de doute : pas de réseau, réponse illisible).
+async fn site_switch(key: &str) -> bool {
     let Ok(client) = http() else { return false };
     let Ok(res) = site_request(|site| client.get(format!("{site}/api/config")).timeout(Duration::from_secs(6))).await else { return false };
     let Ok(text) = res.text().await else { return false };
     serde_json::from_str::<serde_json::Value>(&text)
         .ok()
-        .and_then(|v| v["contributions"].as_bool())
+        .and_then(|v| v[key].as_bool())
         .unwrap_or(false)
+}
+
+/// Les comptes (Onde Équipe) sont-ils ouverts ? Tant que non, la section Compte reste cachée.
+#[tauri::command]
+async fn accounts_open() -> bool {
+    site_switch("comptes").await
 }
 
 /// Lit un fichier audio choisi par l'utilisateur (pré-écoute et analyse dans l'interface).
@@ -852,7 +864,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, resolve_status, install_resolve_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, resolve_status, install_resolve_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, accounts_open, compte::account_api, compte::account_signed_in, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

@@ -9,6 +9,7 @@ import { introWanted, playIntro } from "./intro";
 import { playOutro } from "./outro";
 import { launchWanted, playLaunch, type LaunchMode } from "./lancement";
 import { createContributions } from "./contribuer";
+import { createAccount } from "./compte";
 import { t, tn, getLang, langPref, setLangPref, type LangPref, soundTitle, soundDesc, catLabel, formatLabel, licenseLabel, errText, collate } from "./i18n";
 
 // ---------- État ----------
@@ -198,6 +199,11 @@ function render(): void {
     el?.focus();
     if (el) el.setSelectionRange(el.value.length, el.value.length);
   }
+  if (focused?.startsWith("ac-")) {
+    const el = document.getElementById(focused) as HTMLInputElement | null;
+    el?.focus();
+    try { el?.setSelectionRange(el.value.length, el.value.length); } catch { /* champ e-mail */ }
+  }
   if (focused === "pl-name") {
     const el = document.getElementById("pl-name") as HTMLInputElement | null;
     el?.focus();
@@ -228,7 +234,7 @@ async function changeLibrary(path: string | null): Promise<void> {
 }
 
 function settingsScreen(): string {
-  const sections: [string, string][] = [["r-app", t("Apparence")], ["r-lib", t("Dossier des sons")], ["r-keys", t("Raccourcis")], ["r-upd", t("Mises à jour")], ["r-about", t("À propos")]];
+  const sections: [string, string][] = [...(account.visible() ? [["r-compte", t("Compte")] as [string, string]] : []), ["r-app", t("Apparence")], ["r-lib", t("Dossier des sons")], ["r-keys", t("Raccourcis")], ["r-upd", t("Mises à jour")], ["r-about", t("À propos")]];
   const themes: [Theme, string][] = [["clair", `${ICON.sun}${t("Clair")}`], ["sombre", `${ICON.moon}${t("Sombre")}`], ["systeme", api.isMac ? t("Comme macOS") : t("Comme Windows")]];
   const langs: [LangPref, string][] = [["auto", api.isMac ? t("Comme macOS") : t("Comme Windows")], ["fr", "Français"], ["en", "English"]];
   const keys: [string, string][] = [[t("Rechercher"), `${api.MOD} K`], [t("Écouter / pause"), t("ESPACE")], [t("Son suivant / précédent"), "↓ ↑"], [t("Ajouter aux favoris"), "F"], [t("Fermer / revenir"), t("ÉCHAP")], [t("Glisser vers la timeline"), t("SOURIS")]];
@@ -243,6 +249,8 @@ function settingsScreen(): string {
     </nav>
     <main class="set-main">
       <h1>${t("Réglages")}</h1>
+
+      ${account.section()}
 
       <section id="r-app" aria-labelledby="h-app">
         <h2 id="h-app" class="eyebrow">${t("Apparence")}</h2>
@@ -344,6 +352,9 @@ function winButtons(): string {
         <button data-act="win-close" class="close" aria-label="${t("Fermer")}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor"/></svg></button>
       </div>`;
 }
+
+// ---------- Compte et équipe ----------
+const account = createAccount({ render: () => render(), toast });
 
 // ---------- Mes contributions ----------
 const contrib = createContributions({
@@ -845,6 +856,7 @@ root.addEventListener("click", async (e) => {
   if (act?.startsWith("ob-")) { await accueilAction(act, el); return; }
   if (act?.startsWith("fb-")) { await feedbackAction(act, el); return; }
   if (act?.startsWith("cb-")) { await contrib.action(act, el); return; }
+  if (act?.startsWith("ac-")) { await account.action(act, el); return; }
   if (act === "contrib") { state.screen = "contrib"; render(); return; }
   if (state.feedback) return;
 
@@ -903,7 +915,7 @@ root.addEventListener("click", async (e) => {
       try { await api.setCleanupDays(days); state.cleanup = await api.cleanupInfo(); } catch { toast(t("Réglage impossible à enregistrer.")); }
       render(); return;
     }
-    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.screen === "reglages") void api.cleanupInfo().then((c) => { state.cleanup = c; if (state.screen === "reglages") render(); }).catch(() => {}); if (state.compact) { state.compact = false; store.set("onde.compact", false); await api.setCompactWindow(false); } render(); return;
+    case "settings": state.screen = state.screen === "reglages" ? "biblio" : "reglages"; if (state.screen === "reglages") account.refresh(); if (state.screen === "reglages") void api.cleanupInfo().then((c) => { state.cleanup = c; if (state.screen === "reglages") render(); }).catch(() => {}); if (state.compact) { state.compact = false; store.set("onde.compact", false); await api.setCompactWindow(false); } render(); return;
     case "back": state.screen = "biblio"; render(); return;
     case "feedback": state.feedback = { kind: "bug", message: "", email: store.get("onde.email", ""), sending: false, error: "" }; state.intOpen = false; render(); document.getElementById("fb-msg")?.focus(); return;
     case "open-site": try { await api.openUrl("https://ondesound.com"); } catch { toast(t("Impossible d'ouvrir le site.")); } return;
@@ -955,6 +967,7 @@ root.addEventListener("input", (e) => {
   if (el.id === "q") { state.query = el.value; state.limit = 150; render(); }
   if (el.id === "pl-name") { const p = playlistOf(state.playlistId); if (p) { p.name = el.value; savePlaylists(); const nav = document.querySelector(`.side [data-pl="${p.id}"] span`); if (nav) nav.lastChild!.textContent = el.value; } }
   if (el.id?.startsWith("cb-")) contrib.input(el);
+  if (el.id?.startsWith("ac-")) account.input(el);
   if (state.feedback && el.id === "fb-msg") state.feedback.message = el.value;
   if (state.feedback && el.id === "fb-mail") { state.feedback.email = el.value; store.set("onde.email", el.value); }
 });
@@ -1037,6 +1050,7 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "BUTTON") { e.preventDefault(); void accueilAction("ob-next", document.body); }
     return;
   }
+  if ((e.target as HTMLElement).id?.startsWith("ac-") && e.key === "Enter") { e.preventDefault(); account.enter((e.target as HTMLElement).id); return; }
   if ((e.target as HTMLElement).id === "pl-name") { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLElement).blur(); return; }
   const typing = ["INPUT", "SELECT"].includes((e.target as HTMLElement).tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("q")?.focus(); return; }
@@ -1131,6 +1145,7 @@ async function start(): Promise<void> {
   store.set("onde.versionVue", state.version);
   if (state.news) render();
   void loadPerso();
+  void account.init().then(() => { if (state.screen === "reglages") render(); });
   void api.contributionsOpen().then((open) => { state.contribOpen = open; if (open) render(); });
   state.update = await api.checkForUpdate();
   if (state.update) render();
