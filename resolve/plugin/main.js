@@ -11,6 +11,7 @@ const os = require("os");
 const https = require("https");
 
 const PLUGIN_ID = "com.ondesound.resolve";
+const SITE = "https://ondesound.com";
 const BIN = "Onde";
 
 let WorkflowIntegration = null;
@@ -60,9 +61,9 @@ function markUsed(file) {
 }
 
 // ---------- Réseau ----------
-function get(url, redirects = 3) {
+function get(url, redirects = 3, extra = {}) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { "User-Agent": "Onde-Resolve" } }, (res) => {
+    https.get(url, { headers: { "User-Agent": "Onde-Resolve", ...extra } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
         res.resume();
         resolve(get(new URL(res.headers.location, url).toString(), redirects - 1));
@@ -79,6 +80,33 @@ async function getJson(url) {
   const chunks = [];
   for await (const c of res) chunks.push(c);
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+/** Sons et playlists des équipes, avec la session de l'application Onde (même ordinateur, même utilisateur). */
+async function teamContent() {
+  let token = "";
+  try { token = JSON.parse(fs.readFileSync(path.join(configDir(), "session.json"), "utf8")).token || ""; } catch { return null; }
+  if (!token) return null;
+  const auth = { Authorization: `Bearer ${token}` };
+  const json = async (url) => {
+    const res = await get(url, 0, auth);
+    const chunks = [];
+    for await (const c of res) chunks.push(c);
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  };
+  let me;
+  try { me = await json(`${SITE}/api/compte/moi`); } catch { return null; }
+  const teams = (me.teams || []).filter((t) => t.active);
+  if (!teams.length) return null;
+  const out = { teams: teams.map((t) => ({ id: t.id, name: t.name })), sounds: [], playlists: [] };
+  for (const team of teams) {
+    try {
+      const c = await json(`${SITE}/api/equipe/${team.id}/contenu`);
+      for (const s of c.sounds) out.sounds.push({ ...s, teamId: team.id });
+      for (const p of c.playlists) out.playlists.push({ ...p, teamId: team.id });
+    } catch { /* équipe inaccessible pour l'instant */ }
+  }
+  return out;
 }
 
 async function download(url, dest) {
@@ -188,6 +216,7 @@ handle("getJson", getJson);
 handle("download", download);
 handle("insert", insert);
 handle("markUsed", async (file) => markUsed(file));
+handle("teamContent", teamContent);
 
 // Glisser un son du panneau vers la timeline ou le Media Pool de Resolve
 ipcMain.on("onde:drag", (e, file) => {

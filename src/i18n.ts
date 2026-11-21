@@ -69,7 +69,7 @@ export function errText(e: unknown): string {
 export const soundTitle = (s: Sound): string => (lang === "en" && s.titleEn ? s.titleEn : s.title);
 export const soundDesc = (s: Sound): string => (lang === "en" ? s.descriptionEn || s.description || "" : s.description || "");
 export const catLabel = (c: string): string => (lang === "en" ? CATS[c] ?? c : c);
-export const licenseLabel = (l: string): string => (lang === "en" ? ({ "Domaine public": "Public domain", "Votre son": "Your sound" } as Record<string, string>)[l] ?? l : l);
+export const licenseLabel = (l: string): string => (lang === "en" ? ({ "Domaine public": "Public domain", "Votre son": "Your sound", "Son de l'équipe": "Team sound" } as Record<string, string>)[l] ?? l : l);
 /** « WAV · 48 kHz · 24 bits · stéréo » → « WAV · 48 kHz · 24-bit · stereo » */
 export const formatLabel = (f: string): string =>
   lang === "en" ? f.replace(/(\d+) bits/, "$1-bit").replace("stéréo", "stereo").replace("multicanal", "multichannel") : f;
@@ -527,5 +527,42 @@ const EN: Record<string, string> = {
   "Vous avez quitté l'équipe.": "You left the team.",
   "Onde Équipe pour notre studio": "Onde Team for our studio",
   "Compte supprimé.": "Account deleted.",
+  // Équipe : sons et playlists partagés
+  "Aucun son dans l'équipe pour l'instant. Cliquez sur « Ajouter des sons… », ou envoyez un de vos sons depuis « Mes sons ».": "No team sounds yet. Click “Add sounds…”, or send one of your sounds from “My sounds”.",
+  "Équipe · {name}": "Team · {name}",
+  "Nouvelle playlist d'équipe avec ce son": "New team playlist with this sound",
+  "Ajouté par": "Added by",
+  "Go": "GB",
+  "Mo": "MB",
+  "Équipe suspendue. Contactez Onde.": "Team suspended. Contact Onde.",
+  "Essai terminé. Contactez Onde pour continuer.": "Trial ended. Contact Onde to continue.",
+  "Sons de l'équipe": "Team sounds",
+  "Nouvelle playlist d'équipe": "New team playlist",
+  "{n} son partagé": "{n} shared sound",
+  "{n} sons partagés": "{n} shared sounds",
+  "{used} sur {gb} Go": "{used} of {gb} GB",
+  "tout est sur cet ordinateur": "all on this computer",
+  "Tout télécharger ({n})": "Download all ({n})",
+  "Ajouter des sons…": "Add sounds…",
+  "PARTAGÉE · {team}": "SHARED · {team}",
+  "Supprimer « {name} » pour toute l'équipe ? Les sons ne sont pas effacés.": "Delete “{name}” for the whole team? The sounds themselves are not deleted.",
+  "Supprimer ce son pour toute l'équipe ?": "Delete this sound for the whole team?",
+  "Supprimer de l'équipe": "Delete from team",
+  "Envoyer à l'équipe {name}": "Send to team {name}",
+  "Playlist n°{k}": "Playlist #{k}",
+  "Ajouté à la playlist de l'équipe.": "Added to the team playlist.",
+  "Envoi du son à l'équipe…": "Sending the sound to the team…",
+  "Son envoyé à l'équipe et ajouté à « {name} ».": "Sound sent to the team and added to “{name}”.",
+  "« {title} » est maintenant dans les sons de l'équipe.": "“{title}” is now in the team's sounds.",
+  "Envoi {i} sur {n}…": "Sending {i} of {n}…",
+  "{n} son ajouté à l'équipe.": "{n} sound added to the team.",
+  "{n} sons ajoutés à l'équipe.": "{n} sounds added to the team.",
+  "Téléchargement {i} sur {n}…": "Downloading {i} of {n}…",
+  "Les sons de l'équipe sont disponibles hors ligne.": "The team's sounds are available offline.",
+  "Son supprimé de l'équipe.": "Sound deleted from the team.",
+  "fichier trop lourd (100 Mo au maximum)": "file too large (100 MB maximum)",
+  "Session expirée. Reconnectez-vous.": "Your session has expired. Please sign in again.",
+  "Où chercher": "Where to search",
+  "Toute la bibliothèque": "Whole library",
 // ---------- fin des traductions
 };

@@ -6,7 +6,7 @@ import { errText, getLang, t, tn } from "./i18n";
 interface Member { id: string; email: string; name: string; role: Role; joinedAt: string }
 interface PendingInvite { id: string; email: string; role: Role; createdAt: string; expiresAt: string }
 type Role = "proprietaire" | "membre";
-interface Team {
+export interface Team {
   id: string; name: string; plan: string; planName: string; seats: number; storageGb: number;
   status: "essai" | "actif" | "suspendu"; trialUntil: string | null; active: boolean; role: Role;
   members?: Member[]; invitations?: PendingInvite[]; seatsUsed?: number;
@@ -17,6 +17,8 @@ interface Account { id: string; email: string; name: string }
 export interface AccountHost {
   render: () => void;
   toast: (msg: string) => void;
+  /** Les équipes du compte ont changé (connexion, invitation acceptée, déconnexion…). */
+  teamsChanged: (teams: Team[], accountId: string | null) => void;
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -56,6 +58,7 @@ export function createAccount(host: AccountHost) {
         try { return { ...team, ...(await api.accountApi("GET", `equipe/${team.id}`)).team }; } catch { return team; }
       }));
       st.error = "";
+      host.teamsChanged(st.teams, st.account?.id ?? null);
     } catch (e) {
       if ((e as { status?: number }).status === 401) signOutLocally();
       else fail(e);
@@ -72,6 +75,7 @@ export function createAccount(host: AccountHost) {
     st.step = "email";
     st.code = "";
     st.confirmDelete = false;
+    host.teamsChanged([], null);
   }
 
   async function run(key: string, job: () => Promise<void>): Promise<void> {
@@ -208,6 +212,7 @@ export function createAccount(host: AccountHost) {
     async init(): Promise<void> {
       st.signedIn = await api.accountSignedIn().catch(() => false);
       st.visible = st.signedIn || (await api.accountsOpen());
+      if (st.signedIn) void load(); // équipes à jour dès le démarrage (sons et playlists partagés)
     },
 
     /** La section Compte est-elle montrée ? (Onde Équipe n'est pas encore ouvert à tous) */

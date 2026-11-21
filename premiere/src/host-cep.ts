@@ -1,7 +1,7 @@
 // Panneau Onde, version CEP : Premiere Pro 2019 et plus (2022, 2023, 2024, 2025…).
 // Le panneau tourne dans un Chromium avec Node.js (fichiers, réseau sans restriction),
 // et parle à Premiere via un script ExtendScript (host.jsx).
-import { startPanel, type Host } from "./ui";
+import { SITE, startPanel, type Host, type TeamContent } from "./ui";
 import type { Sound } from "../../src/types";
 import { setLangPref, t } from "../../src/i18n";
 
@@ -26,9 +26,9 @@ function evalScript(code: string): Promise<string> {
   });
 }
 
-function get(url: string, redirects = 3): Promise<any> {
+function get(url: string, redirects = 3, extra: Record<string, string> = {}): Promise<any> {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { "User-Agent": "Onde-Premiere" } }, (res: any) => {
+    https.get(url, { headers: { "User-Agent": "Onde-Premiere", ...extra } }, (res: any) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
         res.resume();
         resolve(get(res.headers.location, redirects - 1));
@@ -77,7 +77,33 @@ function configDir(): string {
     : path.join(home, "Library", "Application Support", "app.onde.desktop");
 }
 
+async function readJson(res: any): Promise<any> {
+  const chunks: any[] = [];
+  for await (const c of res) chunks.push(c);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+/** Sons et playlists des équipes, avec la session de l'application Onde (même ordinateur, même utilisateur). */
+async function teamContent(): Promise<TeamContent | null> {
+  let token = "";
+  try { token = JSON.parse(fs.readFileSync(path.join(configDir(), "session.json"), "utf8")).token || ""; } catch { return null; }
+  if (!token) return null;
+  const auth = { Authorization: `Bearer ${token}` };
+  const me = await readJson(await get(`${SITE}/api/compte/moi`, 0, auth)).catch(() => null);
+  const teams = (me?.teams ?? []).filter((x: any) => x.active);
+  if (!teams.length) return null;
+  const out: TeamContent = { teams: teams.map((x: any) => ({ id: x.id, name: x.name })), sounds: [], playlists: [] };
+  for (const team of teams) {
+    const c = await readJson(await get(`${SITE}/api/equipe/${team.id}/contenu`, 0, auth)).catch(() => null);
+    if (!c?.ok) continue;
+    for (const snd of c.sounds) out.sounds.push({ ...snd, teamId: team.id });
+    for (const p of c.playlists) out.playlists.push({ ...p, teamId: team.id });
+  }
+  return out;
+}
+
 const host: Host = {
+  teamContent,
   canDrag: true,
   sep: path.sep,
 
@@ -95,10 +121,7 @@ const host: Host = {
   },
 
   async getJson(url) {
-    const res = await get(url);
-    const chunks: any[] = [];
-    for await (const c of res) chunks.push(c);
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return readJson(await get(url));
   },
 
   async download(url, dest) {

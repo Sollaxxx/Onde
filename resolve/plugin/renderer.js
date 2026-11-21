@@ -529,12 +529,59 @@
     "Invitation créée. L'e-mail n'a pas pu partir : prévenez {email} de se connecter à Onde avec cette adresse.": "Invitation created, but the email couldn't be sent: let {email} know to sign in to Onde with that address.",
     "Vous avez quitté l'équipe.": "You left the team.",
     "Onde Équipe pour notre studio": "Onde Team for our studio",
-    "Compte supprimé.": "Account deleted."
+    "Compte supprimé.": "Account deleted.",
+    // Équipe : sons et playlists partagés
+    "Aucun son dans l'équipe pour l'instant. Cliquez sur « Ajouter des sons… », ou envoyez un de vos sons depuis « Mes sons ».": "No team sounds yet. Click “Add sounds…”, or send one of your sounds from “My sounds”.",
+    "Équipe · {name}": "Team · {name}",
+    "Nouvelle playlist d'équipe avec ce son": "New team playlist with this sound",
+    "Ajouté par": "Added by",
+    "Go": "GB",
+    "Mo": "MB",
+    "Équipe suspendue. Contactez Onde.": "Team suspended. Contact Onde.",
+    "Essai terminé. Contactez Onde pour continuer.": "Trial ended. Contact Onde to continue.",
+    "Sons de l'équipe": "Team sounds",
+    "Nouvelle playlist d'équipe": "New team playlist",
+    "{n} son partagé": "{n} shared sound",
+    "{n} sons partagés": "{n} shared sounds",
+    "{used} sur {gb} Go": "{used} of {gb} GB",
+    "tout est sur cet ordinateur": "all on this computer",
+    "Tout télécharger ({n})": "Download all ({n})",
+    "Ajouter des sons…": "Add sounds…",
+    "PARTAGÉE · {team}": "SHARED · {team}",
+    "Supprimer « {name} » pour toute l'équipe ? Les sons ne sont pas effacés.": "Delete “{name}” for the whole team? The sounds themselves are not deleted.",
+    "Supprimer ce son pour toute l'équipe ?": "Delete this sound for the whole team?",
+    "Supprimer de l'équipe": "Delete from team",
+    "Envoyer à l'équipe {name}": "Send to team {name}",
+    "Playlist n°{k}": "Playlist #{k}",
+    "Ajouté à la playlist de l'équipe.": "Added to the team playlist.",
+    "Envoi du son à l'équipe…": "Sending the sound to the team…",
+    "Son envoyé à l'équipe et ajouté à « {name} ».": "Sound sent to the team and added to “{name}”.",
+    "« {title} » est maintenant dans les sons de l'équipe.": "“{title}” is now in the team's sounds.",
+    "Envoi {i} sur {n}…": "Sending {i} of {n}…",
+    "{n} son ajouté à l'équipe.": "{n} sound added to the team.",
+    "{n} sons ajoutés à l'équipe.": "{n} sounds added to the team.",
+    "Téléchargement {i} sur {n}…": "Downloading {i} of {n}…",
+    "Les sons de l'équipe sont disponibles hors ligne.": "The team's sounds are available offline.",
+    "Son supprimé de l'équipe.": "Sound deleted from the team.",
+    "fichier trop lourd (100 Mo au maximum)": "file too large (100 MB maximum)",
+    "Session expirée. Reconnectez-vous.": "Your session has expired. Please sign in again.",
+    "Où chercher": "Where to search",
+    "Toute la bibliothèque": "Whole library"
     // ---------- fin des traductions
   };
 
   // premiere/src/ui.ts
   var CDN = "https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev";
+  function folderName(name) {
+    const clean = [...name].map((c) => c.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(c) ? "_" : c).join("").trim().replace(/^\.+|\.+$/g, "").trim().slice(0, 60);
+    return clean || "Equipe";
+  }
+  function teamFileName(id, fileName) {
+    const dot = fileName.lastIndexOf(".");
+    const stem = folderName(dot > 0 ? fileName.slice(0, dot) : fileName);
+    const ext = dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+    return `${stem}_${id.slice(0, 8)}.${ext && ext.length <= 5 && /^[a-z0-9]+$/.test(ext) ? ext : "wav"}`;
+  }
   var PAGE = 60;
   function startPanel(host) {
     document.documentElement.lang = getLang();
@@ -546,6 +593,11 @@
     if (tag) tag.textContent = t("BÊTA");
     const state = {
       catalog: [],
+      team: null,
+      teamSounds: [],
+      scope: "all",
+      // "all", "team:<id>" ou "pl:<id>"
+      query: "",
       results: [],
       limit: PAGE,
       selId: null,
@@ -560,8 +612,13 @@
     const statusEl = $("status");
     const player = $("player");
     const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-    const byId = (id) => state.catalog.find((s) => s.id === id) ?? null;
-    const soundUrl = (s) => `${CDN}/sons/${encodeURIComponent(s.file)}`;
+    const index = /* @__PURE__ */ new Map();
+    const byId = (id) => id ? index.get(id) ?? null : null;
+    const soundUrl = (s) => s.remote ?? `${CDN}/sons/${encodeURIComponent(s.file)}`;
+    const reindex = () => {
+      index.clear();
+      for (const s of [...state.catalog, ...state.teamSounds]) index.set(s.id, s);
+    };
     function up(el, attr) {
       let n = el;
       while (n && n !== listEl) {
@@ -580,7 +637,8 @@
       if (known) return Promise.resolve(known);
       let job = state.inflight.get(s.id);
       if (job) return job;
-      const dest = [state.libDir, s.code, s.file].join(host.sep);
+      const teamName = s.team ? state.team?.teams.find((x) => x.id === s.team)?.name ?? "" : "";
+      const dest = s.team ? [state.libDir, "Equipes", folderName(teamName), teamFileName(s.id.slice(3), s.file)].join(host.sep) : [state.libDir, s.code, s.file].join(host.sep);
       job = host.download(soundUrl(s), dest).then(() => {
         state.local.set(s.id, dest);
         state.inflight.delete(s.id);
@@ -702,8 +760,17 @@
       listEl.innerHTML = rows + more;
       listEl.scrollTop = top;
     }
+    function scopeList() {
+      if (state.scope.startsWith("team:")) return state.teamSounds.filter((s) => s.team === state.scope.slice(5));
+      if (state.scope.startsWith("pl:")) {
+        const p = state.team?.playlists.find((x) => x.id === state.scope.slice(3));
+        return (p?.ids ?? []).map((id) => byId(id)).filter((s) => !!s);
+      }
+      return [...state.catalog, ...state.teamSounds];
+    }
     function runSearch(q2) {
-      state.results = search(state.catalog, q2);
+      state.query = q2;
+      state.results = search(scopeList(), q2);
       state.limit = PAGE;
       $("count").textContent = tn(state.results.length, "{n} SON", "{n} SONS");
       listEl.scrollTop = 0;
@@ -735,12 +802,69 @@
       clearTimeout(timer);
       timer = setTimeout(() => runSearch(v), 120);
     });
+    function scopeMenu() {
+      let sel = document.getElementById("scope");
+      if (!state.team?.teams.length) {
+        sel?.remove();
+        state.scope = "all";
+        return;
+      }
+      if (!sel) {
+        sel = document.createElement("select");
+        sel.id = "scope";
+        sel.setAttribute("aria-label", t("Où chercher"));
+        sel.addEventListener("change", () => {
+          state.scope = sel.value;
+          runSearch(state.query);
+        });
+        document.getElementById("q")?.parentElement?.appendChild(sel);
+      }
+      const opts = [`<option value="all">${t("Toute la bibliothèque")}</option>`];
+      for (const team of state.team.teams) {
+        opts.push(`<option value="team:${team.id}">${esc(t("Équipe · {name}", { name: team.name }))}</option>`);
+        for (const p of state.team.playlists.filter((x) => x.teamId === team.id)) opts.push(`<option value="pl:${p.id}">— ${esc(p.name)}</option>`);
+      }
+      sel.innerHTML = opts.join("");
+      if (![...sel.options].some((o) => o.value === state.scope)) state.scope = "all";
+      sel.value = state.scope;
+    }
+    async function loadTeam() {
+      if (!host.teamContent) return;
+      try {
+        const c = await host.teamContent();
+        state.team = c;
+        const names = new Map((c?.teams ?? []).map((x) => [x.id, x.name]));
+        state.teamSounds = (c?.sounds ?? []).map((r) => ({
+          id: `eq-${r.id}`,
+          title: r.title,
+          titleEn: r.title,
+          code: "EQP",
+          category: names.get(r.teamId) ?? "",
+          tags: r.tags ?? [],
+          durationMs: r.durationMs,
+          file: r.fileName,
+          format: r.format,
+          license: "Son de l'équipe",
+          peaks: r.peaks ?? [],
+          team: r.teamId,
+          remote: r.url
+        }));
+        reindex();
+        scopeMenu();
+        if (state.catalog.length) runSearch(state.query);
+      } catch {
+      }
+    }
+    setInterval(() => void loadTeam(), 10 * 6e4);
+    window.addEventListener("focus", () => void loadTeam());
     void (async () => {
       try {
         state.libDir = await host.libraryDir();
         const data = await host.getJson(`${CDN}/catalogue/v1.json`);
         state.catalog = data.sounds.sort((a, b) => collate(soundTitle(a), soundTitle(b)));
+        reindex();
         runSearch("");
+        void loadTeam();
         status(host.canDrag ? t("Glissez un son vers la timeline, ou cliquez Insérer.") : t("Cliquez Insérer pour poser un son à la tête de lecture."));
       } catch (e) {
         status(t("Impossible de charger la bibliothèque : {e}", { e: errText(e) }), "err");
@@ -782,6 +906,7 @@
         return t("« {title} » posé sur A{track} à {tc}.", { title, track: r.track, tc: r.timecode });
       },
       markUsed: (file) => call(bridge.markUsed(file)),
+      teamContent: () => call(bridge.teamContent()),
       setDragData() {
       },
       startNativeDrag: (file) => bridge.startDrag(file),

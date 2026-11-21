@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld("onde", {
   download: (url, dest) => ipcRenderer.invoke("onde:download", url, dest),
   insert: (file, durationSec) => ipcRenderer.invoke("onde:insert", file, durationSec),
   markUsed: (file) => ipcRenderer.invoke("onde:markUsed", file),
+  teamContent: () => ipcRenderer.invoke("onde:teamContent"),
   startDrag: (file) => ipcRenderer.send("onde:drag", file),
 });
