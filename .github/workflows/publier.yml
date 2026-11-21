@@ -82,6 +82,18 @@ jobs:
       - name: Installer les dépendances
         run: npm ci
 
+      # Le fichier de mise à jour (latest.json) est réécrit par cette étape : sans les notes, le bandeau
+      # « Mise à jour » de l'application n'afficherait plus le résumé de la version.
+      - name: Notes de version (CHANGELOG.md)
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<NOTES_FIN'
+            node scripts/notes.mjs
+            echo 'NOTES_FIN'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Compiler, signer et ajouter à la version
         uses: tauri-apps/tauri-action@v0
         env:
@@ -91,6 +103,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: Onde v__VERSION__
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
