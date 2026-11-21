@@ -9,7 +9,8 @@ Onde speaks English, and comes to DaVinci Resolve.
 ### What's new
 - **English interface**: Onde follows your computer's language. You can change it in Settings → Appearance → Language (Français, English, or like the system). In English, sounds, their descriptions and categories are shown in English too.
 - **DaVinci Resolve Studio panel**: search, listen and place sounds without leaving Resolve. **Insert** places the sound at the playhead on a free audio track, and files it in an "Onde" bin. You can also drag a sound to the timeline or the Media Pool. One-click install from the Integrations button, then Workspace → Workflow Integrations → Onde. The panel requires the Studio version of Resolve: with the free version, dragging from the app works as before.
-- The Premiere panel speaks English too when Premiere is in English.
+- The Premiere panel speaks English too when Premiere is in English (update it from the Integrations button).
+- **Nearly 950 new editing sounds** in the library: risers, whooshes, transitions, bass drops, sub drops, cinematic impacts, logo stings, pops, glitches… Search for “riser”, “whoosh” or “youtube”.
 
 ## 0.4.0
 
