@@ -27,7 +27,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev https://ondesound.com https://onde-nis.pages.dev; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
       "assetProtocol": {
         "enable": true,
         "scope": [

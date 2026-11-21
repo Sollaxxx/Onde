@@ -582,7 +582,9 @@
     "fichier trop lourd (100 Mo au maximum)": "file too large (100 MB maximum)",
     "Session expirée. Reconnectez-vous.": "Your session has expired. Please sign in again.",
     "Où chercher": "Where to search",
-    "Toute la bibliothèque": "Whole library"
+    "Toute la bibliothèque": "Whole library",
+    "Mode testeur activé : la section Compte est visible.": "Tester mode on: the Account section is visible.",
+    "Mode testeur désactivé.": "Tester mode off."
     // ---------- fin des traductions
   };
 

@@ -755,17 +755,27 @@ async function togglePlay(id: string): Promise<void> {
   state.selId = id;
   if (state.offline && !isLocal(s)) { toast(t("Hors ligne : ce son n'est pas encore sur cet ordinateur.")); render(); return; }
   try {
+    let streaming = false;
     if (state.playingId !== id) {
       const stream = s.team ? s.remote : state.cdn ? api.streamUrl(state.cdn, s) : "";
       if (stream && !state.offline && !s.local && !teams.isLocal(s)) {
         audio.src = stream;                      // la lecture démarre tout de suite…
+        streaming = true;
         void localPath(s).catch(() => {});      // …pendant que le fichier arrive sur le disque
       } else {
         audio.src = await api.audioUrl(s, await localPath(s));
       }
       state.playingId = id;
     }
-    await audio.play();
+    try {
+      await audio.play();
+    } catch (e) {
+      // La lecture en ligne a échoué (lien refusé, coupure…) : on attend le fichier téléchargé et on le lit
+      if (!streaming || (e as Error).name === "NotAllowedError") throw e;
+      const url = await api.audioUrl(s, await localPath(s));
+      if (audio.src !== url) audio.src = url;
+      await audio.play();
+    }
     state.recents = [id, ...state.recents.filter((r) => r !== id)].slice(0, 50);
     store.set("onde.recents", state.recents);
   } catch (e) {
@@ -794,13 +804,19 @@ audio.addEventListener("error", () => {
   const s = byId(state.playingId);
   if (!s || !audio.src.startsWith("http")) return;
   if (!navigator.onLine) goOffline();
-  if (state.local.has(s.id)) {
-    void localPath(s).then(async (p) => { audio.src = await api.audioUrl(s, p); await audio.play(); render(); }).catch(() => {});
-  } else {
+  const giveUp = () => {
     state.playingId = null;
     toast(t("Lecture impossible : pas de connexion, et ce son n'est pas encore sur cet ordinateur."));
     render();
-  }
+  };
+  if (state.offline && !isLocal(s)) { giveUp(); return; }
+  // Lecture en ligne refusée ou coupée : on lit le fichier (déjà là, ou en cours de téléchargement)
+  void localPath(s).then(async (p) => {
+    if (state.playingId !== s.id) return;
+    const url = await api.audioUrl(s, p);
+    if (audio.src !== url) { audio.src = url; await audio.play(); }
+    render();
+  }).catch(giveUp);
 });
 
 // ---------- Hors ligne ----------
