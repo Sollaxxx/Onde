@@ -102,7 +102,14 @@ async function modifier({ request, env }, _p, team) {
 }
 
 async function supprimer({ env }, _p, team) {
+  // Les sons de l'équipe sont effacés du stockage privé, avec ses playlists.
+  const files = (await env.DB.prepare("SELECT r2_key FROM sons_equipe WHERE team_id = ?1").bind(team.id).all()).results;
+  if (env.EQUIPES) for (const f of files) await env.EQUIPES.delete(f.r2_key);
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM playlist_equipe_sons WHERE playlist_id IN (SELECT id FROM playlists_equipe WHERE team_id = ?1)").bind(team.id),
+    env.DB.prepare("DELETE FROM playlists_equipe WHERE team_id = ?1").bind(team.id),
+    env.DB.prepare("DELETE FROM sons_equipe WHERE team_id = ?1").bind(team.id),
+    env.DB.prepare("DELETE FROM equipe_versions WHERE team_id = ?1").bind(team.id),
     env.DB.prepare("DELETE FROM membres WHERE team_id = ?1").bind(team.id),
     env.DB.prepare("DELETE FROM invitations WHERE team_id = ?1").bind(team.id),
     env.DB.prepare("DELETE FROM equipes WHERE id = ?1").bind(team.id),

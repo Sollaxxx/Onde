@@ -474,3 +474,17 @@ button { cursor: pointer; }
 .ac-invite { display: flex; gap: 8px; flex-wrap: wrap; }
 .secondary:disabled { opacity: 0.45; cursor: default; }
 .secondary:disabled:hover { border-color: var(--line-strong); }
+
+/* ---------- Équipe : sons et playlists partagés ---------- */
+.pl-menu-label { margin: 8px 10px 2px; font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.eq-head { flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 16px; }
+.eq-title { display: grid; gap: 3px; min-width: 0; }
+.eq-title b { font: 700 22px/1.15 var(--f-display); letter-spacing: -0.01em; }
+.eq-title span { font-size: 12.5px; color: var(--muted); }
+.eq-title .eq-meter { display: block; width: 220px; max-width: 100%; height: 4px; background: var(--track); margin-top: 4px; }
+.eq-meter i { display: block; height: 100%; background: var(--blue); }
+.eq-head .btns { align-items: center; flex-wrap: wrap; }
+.eq-actions { display: grid; gap: 8px; }
+.eq-actions .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.nav-note { margin: 0 10px 6px; }
+b.pl-name { display: block; }

@@ -22,6 +22,9 @@ export interface Sound {
   bytes?: number;
   /** Son personnel : chemin du fichier sur l'ordinateur (pas de téléchargement). */
   local?: string;
+  /** Son d'équipe (Onde Équipe) : identifiant de l'équipe, et lien temporaire pour l'écouter en ligne. */
+  team?: string;
+  remote?: string;
 }
 
 /** Playlist de l'utilisateur : sons de la banque et sons personnels, dans l'ordre d'ajout. */
@@ -39,7 +42,7 @@ export interface Catalog {
 }
 
 export type Theme = "clair" | "sombre" | "systeme";
-export type View = "tout" | "favoris" | "recents" | "perso" | "playlist";
+export type View = "tout" | "favoris" | "recents" | "perso" | "playlist" | "equipe" | "playlist-eq";
 
 export interface UpdateInfo {
   version: string;

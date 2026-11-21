@@ -1,7 +1,7 @@
 // Comptes Onde : /api/compte/…
 //   POST code                         { email, lang }           → envoie un code à 6 chiffres par e-mail
 //   POST connexion                    { email, code, device }   → { token, account }
-//   GET  moi                                                    → compte, équipes, invitations reçues
+//   GET  moi                                                    → compte, équipes, invitations reçues, droit Onde+
 //   POST moi                          { name?, lang? }          → met à jour le profil
 //   POST deconnexion                                            → ferme cette session
 //   POST supprimer                                              → supprime le compte (RGPD)
@@ -103,10 +103,13 @@ async function moi({ env }, _p, account) {
      FROM invitations i JOIN equipes e ON e.id = i.team_id LEFT JOIN comptes c ON c.id = i.invited_by
      WHERE i.email = ?1 AND i.expires_at > ?2 ORDER BY i.created_at`,
   ).bind(account.email, iso()).all()).results;
+  const views = teams.map((t) => teamView(t, { role: t.role }));
   return json({
     ok: true,
     account: { id: account.id, email: account.email, name: account.name, lang: account.lang },
-    teams: teams.map((t) => teamView(t, { role: t.role })),
+    // Onde+ : inclus pour les membres d'une équipe active (plus tard, aussi l'abonnement Onde+ individuel)
+    plus: views.some((t) => t.active),
+    teams: views,
     invitations: invitations.map((i) => ({
       id: i.id, role: i.role, createdAt: i.created_at, expiresAt: i.expires_at,
       team: { id: i.team_id, name: i.team_name }, invitedBy: i.inviter_name || i.inviter_email || null,

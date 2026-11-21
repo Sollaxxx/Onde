@@ -126,7 +126,7 @@ td select{width:auto}
     if (!teams.length) { $("list").innerHTML = '<p class="empty">Aucune équipe pour l\'instant.</p>'; return; }
     $("list").innerHTML = teams.map(function(t){
       return '<section class="card" data-team="' + t.id + '">' +
-        '<div class="team"><div class="name"><b>' + esc(t.name) + '</b><div class="facts"><span>' + esc(t.planName) + '</span><span>' + t.seatsUsed + ' / ' + t.seats + ' places</span><span>' + t.storageGb + ' Go</span><span>Créée le ' + esc(day(t.createdAt)) + '</span></div>' +
+        '<div class="team"><div class="name"><b>' + esc(t.name) + '</b><div class="facts"><span>' + esc(t.planName) + '</span><span>' + t.seatsUsed + ' / ' + t.seats + ' places</span><span>' + (t.storageUsed / 1073741824).toFixed(t.storageUsed > 1073741824 ? 1 : 2) + ' / ' + t.storageGb + ' Go utilisés</span><span>Créée le ' + esc(day(t.createdAt)) + '</span></div>' +
         '<div class="facts">' + (t.owners.length ? "Propriétaire : " + esc(t.owners.join(", ")) : "Pas encore de propriétaire") + '</div></div>' +
         statusBadge(t) + '<button class="b sm" data-toggle type="button">' + (open[t.id] ? "Fermer" : "Gérer") + '</button></div>' +
         (open[t.id] ? detail(t) : "") +
@@ -181,7 +181,7 @@ td select{width:auto}
       api("equipes/" + id + "/invitations", "POST", { email: email, role: role }).then(function(j){ if (!j.emailSent) alert("Invitation créée, mais l'e-mail n'a pas pu partir."); return done(); }).catch(oops);
       return;
     }
-    if (t.hasAttribute("data-delete")) { if (confirm("Supprimer définitivement cette équipe ? Ses membres en sont retirés.")) { delete open[id]; api("equipes/" + id, "DELETE").then(done).catch(oops); } }
+    if (t.hasAttribute("data-delete")) { if (confirm("Supprimer définitivement cette équipe ? Ses membres en sont retirés, et ses sons et playlists sont effacés.")) { delete open[id]; api("equipes/" + id, "DELETE").then(done).catch(oops); } }
   });
 
   $("list").addEventListener("change", function(e){

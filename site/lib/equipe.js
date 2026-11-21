@@ -50,6 +50,16 @@ const MESSAGES = {
   "equipe-suspendue": ["Cette équipe est suspendue. Contactez Onde.", "This team is suspended. Contact Onde."],
   "dernier-proprietaire": ["L'équipe doit garder au moins un propriétaire.", "The team must keep at least one owner."],
   "nom-invalide": ["Nom vide ou trop long.", "Name is empty or too long."],
+  "equipe-inactive": ["L'essai ou l'abonnement de cette équipe est terminé. Contactez Onde pour la réactiver.", "This team's trial or subscription has ended. Contact Onde to reactivate it."],
+  "stockage-absent": ["Le stockage des équipes n'est pas encore configuré.", "Team storage isn't set up yet."],
+  "fichier-trop-lourd": ["Fichier trop lourd (100 Mo au maximum).", "File too large (100 MB maximum)."],
+  "fichier-vide": ["Fichier vide ou illisible.", "Empty or unreadable file."],
+  "format-inconnu": ["Format non reconnu : WAV, AIFF, FLAC, MP3, OGG ou M4A.", "Unsupported format: WAV, AIFF, FLAC, MP3, OGG or M4A."],
+  "quota-depasse": ["Le stockage de l'équipe est plein ({gb} Go). Supprimez des sons ou contactez Onde pour en ajouter.", "The team's storage is full ({gb} GB). Delete some sounds or contact Onde to add more."],
+  "reserve-auteur": ["Seule la personne qui a ajouté ce son, ou un propriétaire, peut faire ça.", "Only the person who added this sound, or an owner, can do this."],
+  "reserve-createur": ["Seule la personne qui a créé cette playlist, ou un propriétaire, peut faire ça.", "Only the person who created this playlist, or an owner, can do this."],
+  "trop-de-playlists": ["Trop de playlists dans cette équipe.", "Too many playlists in this team."],
+  "lien-expire": ["Lien expiré.", "Link expired."],
   "seul-proprietaire": ["Vous êtes le seul propriétaire d'une équipe. Donnez ce rôle à quelqu'un d'autre avant de supprimer votre compte.", "You're the only owner of a team. Make someone else an owner before deleting your account."],
 };
 
@@ -89,6 +99,20 @@ export async function ensureEquipeTables(db) {
       id TEXT PRIMARY KEY, team_id TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL,
       invited_by TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, UNIQUE (team_id, email))`),
     db.prepare("CREATE TABLE IF NOT EXISTS limites (key TEXT PRIMARY KEY, count INTEGER NOT NULL, start TEXT NOT NULL)"),
+    db.prepare(`CREATE TABLE IF NOT EXISTS sons_equipe (
+      id TEXT PRIMARY KEY, team_id TEXT NOT NULL, title TEXT NOT NULL, file_name TEXT NOT NULL, ext TEXT NOT NULL,
+      size INTEGER NOT NULL, duration_ms INTEGER, peaks TEXT, tags TEXT, format TEXT, sha TEXT, r2_key TEXT NOT NULL,
+      added_by TEXT, created_at TEXT NOT NULL)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS playlists_equipe (
+      id TEXT PRIMARY KEY, team_id TEXT NOT NULL, name TEXT NOT NULL, created_by TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS playlist_equipe_sons (
+      playlist_id TEXT NOT NULL, ref TEXT NOT NULL, position INTEGER NOT NULL, added_by TEXT, added_at TEXT NOT NULL,
+      PRIMARY KEY (playlist_id, ref))`),
+    db.prepare("CREATE TABLE IF NOT EXISTS equipe_versions (team_id TEXT PRIMARY KEY, version INTEGER NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS secrets (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS sons_equipe_team ON sons_equipe (team_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS playlists_equipe_team ON playlists_equipe (team_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS sessions_compte ON sessions (account_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS membres_compte ON membres (account_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS invitations_email ON invitations (email)"),
@@ -187,6 +211,7 @@ export async function teamDetails(db, team) {
     members: members.map((m) => ({ id: m.id, email: m.email, name: m.name || "", role: m.role, joinedAt: m.joined_at })),
     invitations: invitations.map((i) => ({ id: i.id, email: i.email, role: i.role, createdAt: i.created_at, expiresAt: i.expires_at })),
     seatsUsed: members.length + invitations.length,
+    storageUsed: await storageUsed(db, team.id),
   });
 }
 
@@ -199,6 +224,68 @@ export async function invite(env, team, { email, role, invitedBy, inviterName, l
   ).bind(id, team.id, email, role, invitedBy, iso(), iso(Date.now() + INVITATION_TTL)).run();
   const mail = await sendMail(env, inviteMail(lang, { to: email, team: team.name, inviter: inviterName }));
   return { id, emailSent: mail.ok };
+}
+
+// ---------- Contenu partagé (sons et playlists d'équipe) ----------
+export const TEAM_FILE_MAX = 100 * 1024 * 1024; // limite des requêtes Cloudflare (offre gratuite)
+export const LINK_TTL = 12 * HOUR;
+
+/** Chaque modification du contenu d'une équipe incrémente sa version : les applications savent ainsi s'il faut recharger. */
+export async function bumpVersion(db, teamId) {
+  await db.prepare("INSERT INTO equipe_versions (team_id, version) VALUES (?1, 1) ON CONFLICT (team_id) DO UPDATE SET version = version + 1")
+    .bind(teamId).run();
+}
+
+export async function contentVersion(db, teamId) {
+  const r = await db.prepare("SELECT version FROM equipe_versions WHERE team_id = ?1").bind(teamId).first();
+  return r?.version ?? 0;
+}
+
+export async function storageUsed(db, teamId) {
+  const r = await db.prepare("SELECT COALESCE(SUM(size), 0) AS n FROM sons_equipe WHERE team_id = ?1").bind(teamId).first();
+  return r?.n ?? 0;
+}
+
+/** Secret des liens signés : variable LIENS_SECRET, sinon un secret aléatoire créé une fois et gardé dans la base. */
+async function linkSecret(env) {
+  if (env.LIENS_SECRET) return env.LIENS_SECRET;
+  const row = await env.DB.prepare("SELECT value FROM secrets WHERE key = 'liens'").first();
+  if (row) return row.value;
+  const a = new Uint8Array(32);
+  crypto.getRandomValues(a);
+  const value = [...a].map((b) => b.toString(16).padStart(2, "0")).join("");
+  await env.DB.prepare("INSERT OR IGNORE INTO secrets (key, value) VALUES ('liens', ?1)").bind(value).run();
+  return (await env.DB.prepare("SELECT value FROM secrets WHERE key = 'liens'").first()).value;
+}
+
+async function hmac(secret, text) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(text));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+}
+
+/** Lien temporaire vers un son d'équipe : lisible sans en-tête (lecteur audio, panneaux), valable 12 h. */
+export async function signedUrl(env, origin, sound) {
+  const exp = Math.floor((Date.now() + LINK_TTL) / 1000);
+  const sig = await hmac(await linkSecret(env), `${sound.team_id}/${sound.id}/${exp}`);
+  return `${origin}/api/fichier-equipe/${sound.team_id}/${sound.id}/${exp}/${sig}/${encodeURIComponent(sound.file_name)}`;
+}
+
+export async function checkSignature(env, teamId, soundId, exp, sig) {
+  if (!/^\d{9,12}$/.test(exp) || Number(exp) * 1000 < Date.now()) return false;
+  return sameText(await hmac(await linkSecret(env), `${teamId}/${soundId}/${exp}`), String(sig));
+}
+
+export function soundView(row) {
+  let peaks = [];
+  let tags = [];
+  try { peaks = JSON.parse(row.peaks || "[]"); } catch { /* ignoré */ }
+  try { tags = JSON.parse(row.tags || "[]"); } catch { /* ignoré */ }
+  return {
+    id: row.id, title: row.title, fileName: row.file_name, size: row.size, durationMs: row.duration_ms ?? 0,
+    peaks, tags, format: row.format || row.ext.toUpperCase(), addedBy: row.added_by, addedByName: row.added_by_name || "",
+    createdAt: row.created_at,
+  };
 }
 
 // ---------- E-mails ----------

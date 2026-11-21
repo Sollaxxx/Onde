@@ -10,6 +10,7 @@ import { playOutro } from "./outro";
 import { launchWanted, playLaunch, type LaunchMode } from "./lancement";
 import { createContributions } from "./contribuer";
 import { createAccount } from "./compte";
+import { createTeams } from "./equipe";
 import { t, tn, getLang, langPref, setLangPref, type LangPref, soundTitle, soundDesc, catLabel, formatLabel, licenseLabel, errText, collate } from "./i18n";
 
 // ---------- État ----------
@@ -36,6 +37,9 @@ const state = {
   catsOpen: store.get<boolean>("onde.categoriesOuvertes", false),
   plMenu: false, // menu « Ajouter à une playlist » du son sélectionné
   plDelete: false, // confirmation de suppression de la playlist affichée
+  teamId: null as string | null, // équipe affichée (vue « equipe »)
+  eqDelete: null as string | null, // son d'équipe dont on confirme la suppression
+  teamBusy: "", // envoi ou téléchargement en cours dans l'équipe (texte affiché)
   selId: null as string | null,
   playingId: null as string | null,
   theme: store.get<Theme>("onde.theme", "clair"),
@@ -75,21 +79,22 @@ if (api.isMac && api.inTauri) document.body.classList.add("mac");
 
 // ---------- Petites aides ----------
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-// Index de tous les sons (banque + sons personnels), reconstruit quand l'une des deux listes change
-let indexed: [Sound[], Sound[]] = [[], []];
+// Index de tous les sons (banque + sons personnels + sons d'équipe), reconstruit quand une des listes change
+let indexed: [Sound[], Sound[], Sound[]] = [[], [], []];
 let everything: Sound[] = [];
 const index = new Map<string, Sound>();
 function allSounds(): Sound[] {
-  if (indexed[0] !== state.catalog || indexed[1] !== state.perso) {
-    indexed = [state.catalog, state.perso];
-    everything = [...state.catalog, ...state.perso];
+  const shared = teams.sounds();
+  if (indexed[0] !== state.catalog || indexed[1] !== state.perso || indexed[2] !== shared) {
+    indexed = [state.catalog, state.perso, shared];
+    everything = [...state.catalog, ...state.perso, ...shared];
     index.clear();
     for (const x of everything) index.set(x.id, x);
   }
   return everything;
 }
 const byId = (id: string | null) => (id ? (allSounds(), index.get(id) ?? null) : null);
-const isLocal = (s: Sound) => !!s.local || state.local.has(s.id);
+const isLocal = (s: Sound) => !!s.local || state.local.has(s.id) || teams.isLocal(s);
 const playlistOf = (id: string | null) => state.playlists.find((p) => p.id === id) ?? null;
 function savePlaylists(): void { store.set("onde.playlists", state.playlists); }
 /** Tri alphabétique par titre, dans la langue de l'interface. */
@@ -147,6 +152,8 @@ function visibleSounds(): Sound[] {
   if (state.view === "recents") list = ids(state.recents);
   if (state.view === "perso") list = state.perso;
   if (state.view === "playlist") list = ids(playlistOf(state.playlistId)?.ids ?? []);
+  if (state.view === "equipe") list = teams.teamSounds(state.teamId);
+  if (state.view === "playlist-eq") list = ids(teams.playlist(state.playlistId)?.ids ?? []);
   if (state.category) list = list.filter((s) => s.category === state.category);
   if (state.offline && state.onlyLocal) list = list.filter(isLocal);
   return search(list, state.query);
@@ -204,8 +211,8 @@ function render(): void {
     el?.focus();
     try { el?.setSelectionRange(el.value.length, el.value.length); } catch { /* champ e-mail */ }
   }
-  if (focused === "pl-name") {
-    const el = document.getElementById("pl-name") as HTMLInputElement | null;
+  if (focused === "pl-name" || focused === "eqpl-name") {
+    const el = document.getElementById(focused) as HTMLInputElement | null;
     el?.focus();
     el?.setSelectionRange(el.value.length, el.value.length);
   }
@@ -319,7 +326,7 @@ function settingsScreen(): string {
 
       <section id="r-about" class="about" aria-labelledby="h-about">
         <div>
-          <h2 id="h-about">Onde ${esc(state.version)} · open-source</h2>
+          <h2 id="h-about" data-act="about-tap">Onde ${esc(state.version)} · open-source</h2>
           <span>${t("Gratuit, et ça s'entend. Code publié sous licence AGPL-3.0.")}</span>
         </div>
         <div class="btns"><button class="secondary" data-act="open-site">ondesound.com</button><button class="secondary" data-act="replay-accueil">${t("Revoir l'accueil")}</button><span class="badge">${t("SOUTIEN BIENTÔT")}</span></div>
@@ -354,7 +361,17 @@ function winButtons(): string {
 }
 
 // ---------- Compte et équipe ----------
-const account = createAccount({ render: () => render(), toast });
+let aboutTaps = 0;
+let aboutLast = 0;
+const teams = createTeams({
+  changed: () => render(),
+  located: (id, path) => { state.paths.set(id, path); state.local.add(id); },
+});
+const account = createAccount({
+  render: () => render(),
+  toast,
+  teamsChanged: (list, accountId) => teams.setTeams(list.map((x) => ({ id: x.id, name: x.name, role: x.role, active: x.active, status: x.status, storageGb: x.storageGb })), accountId),
+});
 
 // ---------- Mes contributions ----------
 const contrib = createContributions({
@@ -564,7 +581,7 @@ function updateBanner(u: UpdateInfo): string {
 
 function sidebar(): string {
   const views: [View, string, number][] = [
-    ["tout", t("Bibliothèque"), state.catalog.length + state.perso.length],
+    ["tout", t("Bibliothèque"), state.catalog.length + state.perso.length + teams.sounds().length],
     ["perso", t("Mes sons"), state.perso.length],
     ["recents", t("Récents"), state.recents.length],
   ];
@@ -588,6 +605,7 @@ function sidebar(): string {
       ${state.playlists.map((p) => `<button data-act="pl-open" data-pl="${p.id}" aria-current="${state.screen === "biblio" && state.view === "playlist" && state.playlistId === p.id}"><span>${ICON.list}${esc(p.name)}</span><span class="mono">${p.ids.length}</span></button>`).join("")}
       <button class="nav-add" data-act="pl-new"><span>+ ${t("Nouvelle playlist")}</span></button>
     </div>
+    ${teamNav()}
     <div class="folder"><span class="eyebrow">${t("Bibliothèque")} · ${origin}</span><span class="path" style="margin-bottom:8px">${tn(state.catalog.length, "{n} son", "{n} sons")}${state.perso.length ? ` + ${t("{n} à vous", { n: state.perso.length })}` : ""}</span><span class="eyebrow">${t("Dossier local")}</span><span class="path">${esc(state.libDir)}</span><button class="link-btn" data-act="open-folder">${t("Ouvrir le dossier")}</button></div>
   </nav>`;
 }
@@ -599,6 +617,7 @@ function mainList(list: Sound[]): string {
   const pl = state.view === "playlist" ? playlistOf(state.playlistId) : null;
   const n = state.local.size;
   return `<main class="main">
+    ${state.view === "equipe" ? teamHead() : state.view === "playlist-eq" ? teamPlaylistHead() : ""}
     ${pl ? `<div class="pl-head">
       <label class="sr" for="pl-name">${t("Nom de la playlist")}</label>
       <input id="pl-name" class="pl-name" value="${esc(pl.name)}" maxlength="60" spellcheck="false" />
@@ -637,6 +656,8 @@ function emptyText(): string {
   if (state.view === "perso" && !state.userDirs.length) return t("Ajoutez vos propres dossiers de sons dans Réglages → Mes sons : ils apparaîtront ici et dans la recherche, à côté de la banque.");
   if (state.view === "perso" && state.analyzing) return t("Lecture de vos dossiers…");
   if (state.view === "playlist" && !playlistOf(state.playlistId)?.ids.length) return t("Playlist vide. Sélectionnez un son, puis « Ajouter à une playlist » dans le panneau de droite.");
+  if (state.view === "equipe" && !teams.teamSounds(state.teamId).length) return t("Aucun son dans l'équipe pour l'instant. Cliquez sur « Ajouter des sons… », ou envoyez un de vos sons depuis « Mes sons ».");
+  if (state.view === "playlist-eq" && !teams.playlist(state.playlistId)?.ids.length) return t("Playlist vide. Sélectionnez un son, puis « Ajouter à une playlist » dans le panneau de droite.");
   if (state.view === "recents" && !state.recents.length) return t("Les sons que vous écoutez apparaîtront ici.");
   return t("Aucun son ne correspond. Essayez « porte », « impact » ou « pluie ».");
 }
@@ -676,14 +697,19 @@ function detail(s: Sound): string {
       ${state.plMenu ? `<div class="pl-menu" role="menu">
         ${state.playlists.map((p) => `<button role="menuitemcheckbox" data-act="pl-toggle" data-pl="${p.id}" aria-checked="${p.ids.includes(s.id)}"><span class="box" aria-hidden="true">${p.ids.includes(s.id) ? "✓" : ""}</span>${esc(p.name)}</button>`).join("")}
         <button role="menuitem" data-act="pl-new-with"><span class="box" aria-hidden="true">+</span>${t("Nouvelle playlist avec ce son")}</button>
+        ${teams.activeTeams().map((team) => `<p class="pl-menu-label">${t("Équipe · {name}", { name: esc(team.name) })}</p>
+          ${teams.playlists(team.id).map((p) => `<button role="menuitemcheckbox" data-act="eq-pl-toggle" data-pl="${p.id}" aria-checked="${p.ids.includes(s.id)}"><span class="box" aria-hidden="true">${p.ids.includes(s.id) ? "✓" : ""}</span>${esc(p.name)}</button>`).join("")}
+          <button role="menuitem" data-act="eq-pl-new-with" data-team="${team.id}"><span class="box" aria-hidden="true">+</span>${t("Nouvelle playlist d'équipe avec ce son")}</button>`).join("")}
       </div>` : ""}
     </div>
+    ${teamActions(s)}
     ${desc ? `<p class="desc">${esc(desc)}</p>` : ""}
     <dl class="facts">
       <div><dt>${t("Format")}</dt><dd>${esc(formatLabel(s.format))}</dd></div>
       <div><dt>${t("Catégorie")}</dt><dd>${esc(catLabel(s.category))}</dd></div>
       <div><dt>${t("Licence")}</dt><dd>${s.license === "CC0" ? t("CC0 · sans crédit obligatoire") : esc(licenseLabel(s.license))}</dd></div>
-      ${s.local ? `<div><dt>${t("Fichier")}</dt><dd class="path">${esc(s.file)}</dd></div>` : `<div><dt>${t("Code UCS")}</dt><dd>${s.code}</dd></div>`}
+      ${s.local || s.team ? `<div><dt>${t("Fichier")}</dt><dd class="path">${esc(s.file)}</dd></div>` : `<div><dt>${t("Code UCS")}</dt><dd>${s.code}</dd></div>`}
+      ${s.team && s.author ? `<div><dt>${t("Ajouté par")}</dt><dd>${esc(s.author)}</dd></div>` : ""}
     </dl>
     <div class="tags">${s.tags.map((x) => `<span>${esc(x)}</span>`).join("")}</div>
     ${s.credit ? `<p class="credit">${t("Son :")} <button class="link-btn" data-act="source" title="${t("Ouvrir la page du son")}">${esc(s.credit)} ↗</button></p>` : ""}
@@ -713,7 +739,7 @@ async function localPath(s: Sound): Promise<string> {
   if (known) return known;
   let job = inflight.get(s.id);
   if (!job) {
-    job = api.ensureLocal(s.id).then(
+    job = (s.team ? teams.fetchFile(s) : api.ensureLocal(s.id)).then(
       (p) => { if (p) { state.paths.set(s.id, p); state.local.add(s.id); } inflight.delete(s.id); return p; },
       (e) => { inflight.delete(s.id); throw e; },
     );
@@ -730,8 +756,9 @@ async function togglePlay(id: string): Promise<void> {
   if (state.offline && !isLocal(s)) { toast(t("Hors ligne : ce son n'est pas encore sur cet ordinateur.")); render(); return; }
   try {
     if (state.playingId !== id) {
-      if (state.cdn && !state.offline && !s.local) {
-        audio.src = api.streamUrl(state.cdn, s); // la lecture démarre tout de suite…
+      const stream = s.team ? s.remote : state.cdn ? api.streamUrl(state.cdn, s) : "";
+      if (stream && !state.offline && !s.local && !teams.isLocal(s)) {
+        audio.src = stream;                      // la lecture démarre tout de suite…
         void localPath(s).catch(() => {});      // …pendant que le fichier arrive sur le disque
       } else {
         audio.src = await api.audioUrl(s, await localPath(s));
@@ -830,7 +857,7 @@ root.addEventListener("pointermove", async (e) => {
     const path = await localPath(s);
     if (!ready && !mouseDown) { toast(t("Son prêt : attrapez-le à nouveau pour le glisser.")); return; }
     await api.dragOut([path]);
-    if (!s.local) void api.markDragged(path).catch(() => {}); // utilisé dans un montage : ne sera jamais effacé
+    if (!s.local && !s.team) void api.markDragged(path).catch(() => {}); // utilisé dans un montage : ne sera jamais effacé (les sons d'équipe ne le sont jamais)
   } catch (err) {
     toast(api.inTauri ? t("Glisser impossible : {e}", { e: errText(err) }) : t("Le glisser-déposer vers un logiciel fonctionne dans l'application Onde, pas dans le navigateur."));
   } finally {
@@ -857,6 +884,7 @@ root.addEventListener("click", async (e) => {
   if (act?.startsWith("fb-")) { await feedbackAction(act, el); return; }
   if (act?.startsWith("cb-")) { await contrib.action(act, el); return; }
   if (act?.startsWith("ac-")) { await account.action(act, el); return; }
+  if (act?.startsWith("eq-")) { await teamAction(act, el); return; }
   if (act === "contrib") { state.screen = "contrib"; render(); return; }
   if (state.feedback) return;
 
@@ -927,6 +955,19 @@ root.addEventListener("click", async (e) => {
       await playIntro(openAccueil().then(nextFrame));
       return;
     }
+    case "about-tap": {
+      // 5 clics rapides sur la version : mode testeur (section Compte visible avant l'ouverture à tous)
+      const now = Date.now();
+      aboutTaps = now - aboutLast < 1500 ? aboutTaps + 1 : 1;
+      aboutLast = now;
+      if (aboutTaps >= 5) {
+        aboutTaps = 0;
+        const on = await account.toggleTester();
+        toast(on ? t("Mode testeur activé : la section Compte est visible.") : t("Mode testeur désactivé."));
+        if (on) document.getElementById("r-compte")?.scrollIntoView({ behavior: "smooth" });
+      }
+      return;
+    }
     case "more": state.limit += 300; render(); return;
     case "source": {
       const s = byId(state.selId);
@@ -965,6 +1006,7 @@ root.addEventListener("dblclick", (e) => {
 root.addEventListener("input", (e) => {
   const el = e.target as HTMLInputElement;
   if (el.id === "q") { state.query = el.value; state.limit = 150; render(); }
+  if (el.id === "eqpl-name") renameTeamPlaylist(el.value);
   if (el.id === "pl-name") { const p = playlistOf(state.playlistId); if (p) { p.name = el.value; savePlaylists(); const nav = document.querySelector(`.side [data-pl="${p.id}"] span`); if (nav) nav.lastChild!.textContent = el.value; } }
   if (el.id?.startsWith("cb-")) contrib.input(el);
   if (el.id?.startsWith("ac-")) account.input(el);
@@ -997,6 +1039,199 @@ function openPlaylist(id: string): void {
   state.plDelete = false;
   state.limit = 150;
   render();
+}
+
+// ---------- Équipe (Onde Équipe) : sons et playlists partagés ----------
+const ICON_TEAM = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="4" width="8" height="8"/><rect x="13" y="4" width="8" height="8"/><rect x="3" y="14" width="18" height="6"/></svg>`;
+const mb = (bytes: number) => (bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} ${t("Go")}` : `${Math.max(bytes / 1024 ** 2, bytes ? 0.1 : 0).toFixed(1)} ${t("Mo")}`);
+
+function teamNav(): string {
+  return teams.teams().map((team) => {
+    if (!team.active) {
+      return `<div class="nav"><p class="eyebrow">${t("Équipe · {name}", { name: esc(team.name) })}</p><p class="hint nav-note">${team.status === "suspendu" ? t("Équipe suspendue. Contactez Onde.") : t("Essai terminé. Contactez Onde pour continuer.")}</p></div>`;
+    }
+    const here = (v: View, id?: string) => state.screen === "biblio" && state.view === v && (v === "equipe" ? state.teamId === team.id : state.playlistId === id);
+    return `<div class="nav"><p class="eyebrow">${t("Équipe · {name}", { name: esc(team.name) })}</p>
+      <button data-act="eq-open" data-team="${team.id}" aria-current="${here("equipe")}"><span>${ICON_TEAM}${t("Sons de l'équipe")}</span><span class="mono">${teams.teamSounds(team.id).length}</span></button>
+      ${teams.playlists(team.id).map((p) => `<button data-act="eq-pl-open" data-pl="${p.id}" aria-current="${here("playlist-eq", p.id)}"><span>${ICON.list}${esc(p.name)}</span><span class="mono">${p.ids.length}</span></button>`).join("")}
+      <button class="nav-add" data-act="eq-pl-new" data-team="${team.id}"><span>+ ${t("Nouvelle playlist d'équipe")}</span></button>
+    </div>`;
+  }).join("");
+}
+
+function teamHead(): string {
+  const team = teams.team(state.teamId ?? "");
+  if (!team) return "";
+  const list = teams.teamSounds(team.id);
+  const { used, gb } = teams.storage(team.id);
+  const missing = list.filter((x) => !teams.isLocal(x)).length;
+  return `<div class="pl-head eq-head">
+    <div class="eq-title"><b>${esc(team.name)}</b><span>${tn(list.length, "{n} son partagé", "{n} sons partagés")} · ${t("{used} sur {gb} Go", { used: mb(used), gb })}${missing ? "" : list.length ? ` · ${t("tout est sur cet ordinateur")}` : ""}</span>
+      <span class="eq-meter" aria-hidden="true"><i style="width:${Math.min(100, (used / (gb * 1024 ** 3 || 1)) * 100).toFixed(1)}%"></i></span></div>
+    <div class="btns">
+      ${state.teamBusy ? `<span class="hint">${esc(state.teamBusy)}</span>` : ""}
+      ${missing ? `<button class="secondary" data-act="eq-download-all" ${state.teamBusy || state.offline ? "disabled" : ""}>${t("Tout télécharger ({n})", { n: missing })}</button>` : ""}
+      <button class="secondary strong" data-act="eq-upload" ${state.teamBusy || state.offline ? "disabled" : ""}>${t("Ajouter des sons…")}</button>
+    </div>
+  </div>`;
+}
+
+function teamPlaylistHead(): string {
+  const p = teams.playlist(state.playlistId);
+  if (!p) return "";
+  const team = teams.team(p.teamId);
+  const editable = teams.canEditPlaylist(p);
+  return `<div class="pl-head">
+    <label class="sr" for="eqpl-name">${t("Nom de la playlist")}</label>
+    ${editable ? `<input id="eqpl-name" class="pl-name" value="${esc(p.name)}" maxlength="60" spellcheck="false" />` : `<b class="pl-name">${esc(p.name)}</b>`}
+    <span class="badge on">${t("PARTAGÉE · {team}", { team: esc((team?.name ?? "").toUpperCase()) })}</span>
+    ${editable ? (state.plDelete
+      ? `<span class="pl-confirm">${t("Supprimer « {name} » pour toute l'équipe ? Les sons ne sont pas effacés.", { name: esc(p.name) })} <button class="secondary" data-act="eq-pl-delete-no">${t("Annuler")}</button><button class="secondary danger" data-act="eq-pl-delete-yes">${t("Supprimer")}</button></span>`
+      : `<button class="secondary" data-act="eq-pl-delete">${t("Supprimer la playlist")}</button>`) : ""}
+  </div>`;
+}
+
+/** Panneau de droite : envoyer un son perso à l'équipe, ou supprimer un son de l'équipe. */
+function teamActions(s: Sound): string {
+  const active = teams.activeTeams();
+  if (s.team) {
+    if (!teams.canEdit(s)) return "";
+    return `<div class="eq-actions">${state.eqDelete === s.id
+      ? `<span class="pl-confirm">${t("Supprimer ce son pour toute l'équipe ?")} <button class="secondary" data-act="eq-delete-no">${t("Annuler")}</button><button class="secondary danger" data-act="eq-delete-yes">${t("Supprimer")}</button></span>`
+      : `<button class="link-btn danger" data-act="eq-delete">${t("Supprimer de l'équipe")}</button>`}</div>`;
+  }
+  if (!s.local || !active.length || state.offline) return "";
+  return `<div class="eq-actions">${active.map((team) => `<button class="secondary" data-act="eq-send" data-team="${team.id}" ${state.teamBusy ? "disabled" : ""}>${ICON_TEAM}${t("Envoyer à l'équipe {name}", { name: esc(team.name) })}</button>`).join("")}</div>`;
+}
+
+let renameTimer: ReturnType<typeof setTimeout> | undefined;
+function renameTeamPlaylist(name: string): void {
+  const id = state.playlistId;
+  clearTimeout(renameTimer);
+  renameTimer = setTimeout(() => { if (id) teams.renamePlaylist(id, name).then(() => render()).catch((e) => toast(errText(e))); }, 600);
+}
+
+function openTeamView(view: "equipe" | "playlist-eq", id: string): void {
+  if (state.screen === "contrib") contrib.stop();
+  state.screen = "biblio";
+  state.view = view;
+  if (view === "equipe") state.teamId = id; else state.playlistId = id;
+  state.category = null;
+  state.plDelete = false;
+  state.limit = 150;
+  render();
+}
+
+/** Envoie un son personnel à l'équipe et renvoie son nouvel identifiant (eq-…). */
+async function sendToTeam(teamId: string, s: Sound): Promise<string> {
+  const r = await teams.upload(teamId, s.local!, soundTitle(s));
+  await teams.refresh();
+  return r.id;
+}
+
+async function teamAction(act: string, el: HTMLElement): Promise<void> {
+  const data = (k: string) => el.closest<HTMLElement>(`[data-${k}]`)?.getAttribute(`data-${k}`) ?? "";
+  const cur = byId(state.selId);
+  const fail = (e: unknown) => toast(errText(e));
+  switch (act) {
+    case "eq-open": openTeamView("equipe", data("team")); return;
+    case "eq-pl-open": openTeamView("playlist-eq", data("pl")); return;
+    case "eq-pl-new":
+    case "eq-pl-new-with": {
+      const teamId = data("team");
+      const n = teams.playlists(teamId).length + 1;
+      try {
+        const id = await teams.createPlaylist(teamId, t("Playlist n°{k}", { k: String(n).padStart(2, "0") }));
+        if (act === "eq-pl-new-with" && cur) {
+          state.plMenu = false;
+          const ref = cur.local && !cur.team ? await sendToTeam(teamId, cur) : cur.id;
+          await teams.toggle(id, ref, true);
+          toast(t("Ajouté à la playlist de l'équipe."));
+          render();
+        } else {
+          openTeamView("playlist-eq", id);
+          const input = document.getElementById("eqpl-name") as HTMLInputElement | null;
+          input?.focus(); input?.select();
+        }
+      } catch (e) { fail(e); }
+      return;
+    }
+    case "eq-pl-toggle": {
+      const p = teams.playlist(data("pl"));
+      if (!p || !cur) return;
+      const inside = p.ids.includes(cur.id);
+      try {
+        // Un son perso doit d'abord être envoyé à l'équipe pour que tout le monde puisse l'écouter
+        if (!inside && cur.local && !cur.team) {
+          state.teamBusy = t("Envoi du son à l'équipe…"); render();
+          const ref = await sendToTeam(p.teamId, cur);
+          await teams.toggle(p.id, ref, true);
+          toast(t("Son envoyé à l'équipe et ajouté à « {name} ».", { name: p.name }));
+        } else {
+          await teams.toggle(p.id, cur.id, !inside);
+        }
+      } catch (e) { fail(e); }
+      state.teamBusy = "";
+      render();
+      return;
+    }
+    case "eq-pl-delete": state.plDelete = true; render(); return;
+    case "eq-pl-delete-no": state.plDelete = false; render(); return;
+    case "eq-pl-delete-yes": {
+      const p = teams.playlist(state.playlistId);
+      if (!p) return;
+      try { await teams.deletePlaylist(p.id); openTeamView("equipe", p.teamId); } catch (e) { fail(e); }
+      return;
+    }
+    case "eq-send": {
+      if (!cur?.local) return;
+      state.teamBusy = t("Envoi du son à l'équipe…"); render();
+      try {
+        const id = await sendToTeam(data("team"), cur);
+        toast(t("« {title} » est maintenant dans les sons de l'équipe.", { title: soundTitle(cur) }));
+        state.selId = id;
+      } catch (e) { fail(e); }
+      state.teamBusy = "";
+      render();
+      return;
+    }
+    case "eq-upload": {
+      const teamId = state.teamId;
+      if (!teamId) return;
+      const paths = await api.chooseAudioFiles();
+      if (!paths.length) return;
+      let ok = 0;
+      for (const [i, path] of paths.entries()) {
+        state.teamBusy = t("Envoi {i} sur {n}…", { i: i + 1, n: paths.length }); render();
+        try { await teams.upload(teamId, path); ok++; } catch (e) { fail(e); break; }
+      }
+      state.teamBusy = "";
+      await teams.refresh();
+      if (ok) toast(tn(ok, "{n} son ajouté à l'équipe.", "{n} sons ajoutés à l'équipe."));
+      render();
+      return;
+    }
+    case "eq-download-all": {
+      const list = teams.teamSounds(state.teamId).filter((x) => !teams.isLocal(x));
+      for (const [i, x] of list.entries()) {
+        state.teamBusy = t("Téléchargement {i} sur {n}…", { i: i + 1, n: list.length }); render();
+        try { await localPath(x); } catch (e) { fail(e); break; }
+      }
+      state.teamBusy = "";
+      toast(t("Les sons de l'équipe sont disponibles hors ligne."));
+      render();
+      return;
+    }
+    case "eq-delete": if (cur) state.eqDelete = cur.id; render(); return;
+    case "eq-delete-no": state.eqDelete = null; render(); return;
+    case "eq-delete-yes": {
+      if (!cur) return;
+      try { await teams.deleteSound(cur); toast(t("Son supprimé de l'équipe.")); } catch (e) { fail(e); }
+      state.eqDelete = null;
+      render();
+      return;
+    }
+  }
 }
 
 // ---------- Sons personnels ----------
@@ -1051,7 +1286,7 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if ((e.target as HTMLElement).id?.startsWith("ac-") && e.key === "Enter") { e.preventDefault(); account.enter((e.target as HTMLElement).id); return; }
-  if ((e.target as HTMLElement).id === "pl-name") { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLElement).blur(); return; }
+  if (["pl-name", "eqpl-name"].includes((e.target as HTMLElement).id)) { if (e.key === "Enter" || e.key === "Escape") (e.target as HTMLElement).blur(); return; }
   const typing = ["INPUT", "SELECT"].includes((e.target as HTMLElement).tagName);
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); document.getElementById("q")?.focus(); return; }
   if (e.key === "Escape") {
@@ -1145,6 +1380,7 @@ async function start(): Promise<void> {
   store.set("onde.versionVue", state.version);
   if (state.news) render();
   void loadPerso();
+  void teams.locate().then(() => render());
   void account.init().then(() => { if (state.screen === "reglages") render(); });
   void api.contributionsOpen().then((open) => { state.contribOpen = open; if (open) render(); });
   state.update = await api.checkForUpdate();

@@ -64,6 +64,27 @@ Les tables se créent toutes seules dans la base D1 `onde` (déjà branchée sou
 
 Ne jamais définir `ONDE_DEV` en production : cette variable sert seulement aux tests locaux (le code de connexion est alors renvoyé dans la réponse).
 
+### Stockage privé des sons d'équipe (une seule fois)
+
+Les sons que les équipes partagent ne vont **pas** dans le bucket public de la bibliothèque : ils ont leur propre bucket, privé, que seuls les membres peuvent lire (par des liens temporaires de 12 h).
+
+1. Tableau de bord Cloudflare → **R2** → **Create bucket**, nom : `onde-equipes`. **Ne pas** activer l'accès public.
+2. Projet Pages → **Settings → Bindings → Add → R2 bucket** : **Variable name** `EQUIPES`, bucket `onde-equipes`.
+3. Redéployer.
+
+Sans cette liaison, l'envoi de sons d'équipe répond « Le stockage des équipes n'est pas encore configuré » ; le reste marche.
+
+Coût : les 10 Go gratuits de R2 sont partagés entre tous les buckets du compte (la bibliothèque en prend déjà environ 8,6 Go). Au-delà, Cloudflare facture environ 0,015 $ par Go et par mois ; il faut alors activer la facturation R2 dans le tableau de bord.
+
+### Ce que les équipes partagent
+
+- **Sons de l'équipe** : chaque membre peut envoyer des sons (100 Mo au maximum par fichier, dans la limite du stockage du forfait). Le même fichier envoyé deux fois n'occupe qu'une place. Seul l'auteur d'un son, ou un propriétaire, peut le renommer ou le supprimer.
+- **Playlists partagées** : sons de la banque et sons de l'équipe, visibles chez tous les membres. Seul le créateur, ou un propriétaire, peut la renommer ou la supprimer.
+- **Hors ligne** : l'application garde la liste de l'équipe, et les sons téléchargés (dans `<dossier des sons>/Equipes/<équipe>/`) restent utilisables. Ils ne sont jamais effacés par le nettoyage automatique.
+- **Panneaux Premiere et DaVinci** : ils utilisent la session de l'application Onde du même ordinateur et proposent un menu « Toute la bibliothèque / Équipe / playlists ».
+- **Onde+ inclus** : `/api/compte/moi` renvoie `plus: true` pour tout membre d'une équipe active ; les futures fonctions Onde+ s'appuieront dessus.
+- Quand l'essai se termine ou que l'équipe est suspendue, sons, playlists et liens sont bloqués (rien n'est effacé) ; ils reviennent dès que l'équipe repasse en « Actif ».
+
 ### Forfaits
 
 | Forfait | Places | Stockage | Prix indicatif |
@@ -78,6 +99,7 @@ Places et stockage restent réglables équipe par équipe dans /admin. L'essai g
 
 ```bash
 node site/test-equipe.mjs
+node site/test-equipe-partage.mjs
 ```
 
 Pour essayer l'interface : `node site/serveur-local.mjs`, puis http://localhost:8787/admin/ (mot de passe « admin »). L'application lancée avec `npm run dev` dans un navigateur utilise ce serveur local pour les comptes.

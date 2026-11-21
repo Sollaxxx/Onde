@@ -1,6 +1,6 @@
 // Panneau Onde, version DaVinci Resolve Studio (Workflow Integration).
 // L'interface est celle du panneau Premiere ; fichiers, réseau et Resolve passent par preload.js → main.js.
-import { startPanel, type Host } from "../../premiere/src/ui";
+import { startPanel, type Host, type TeamContent } from "../../premiere/src/ui";
 import { t } from "../../src/i18n";
 
 type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -12,6 +12,7 @@ interface OndeBridge {
   download(url: string, dest: string): Promise<Reply<void>>;
   insert(file: string, durationSec: number): Promise<Reply<{ track: number; timecode: string }>>;
   markUsed(file: string): Promise<Reply<void>>;
+  teamContent(): Promise<Reply<TeamContent | null>>;
   startDrag(file: string): void;
 }
 
@@ -54,6 +55,7 @@ if (!bridge) {
       return t("« {title} » posé sur A{track} à {tc}.", { title, track: r.track, tc: r.timecode });
     },
     markUsed: (file) => call(bridge.markUsed(file)),
+    teamContent: () => call(bridge.teamContent()),
     setDragData() { /* remplacé par startNativeDrag */ },
     startNativeDrag: (file) => bridge.startDrag(file),
     dropHint: (title) => t("Lâchez « {title} » dans la timeline ou le Media Pool.", { title }),

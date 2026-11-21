@@ -195,6 +195,35 @@ export async function accountApi(method: "GET" | "POST" | "DELETE", path: string
   return v;
 }
 
+/** Envoie un fichier audio dans les sons de l'équipe (durée et forme d'onde calculées par l'application). */
+export async function teamUpload(teamId: string, path: string, title?: string): Promise<any> {
+  let v: any;
+  if (inTauri) {
+    v = await invoke("team_upload", { teamId, path, title: title ?? null, lang: getLang() });
+  } else {
+    const f = browserFiles.get(path);
+    if (!f) throw new Error("fichier introuvable");
+    const meta = { title: title || f.name.replace(/\.[^.]+$/, "").replace(/[_\-.]+/g, " "), fileName: f.name, durationMs: 0, peaks: [], format: "" };
+    const r = await fetch(`${DEV_API}/api/equipe/${teamId}/sons`, {
+      method: "POST", body: f,
+      headers: { "X-Onde-Meta": encodeURIComponent(JSON.stringify(meta)), "X-Onde-Langue": getLang(), Authorization: `Bearer ${localStorage.getItem(DEV_TOKEN)}` },
+    });
+    v = { ...(await r.json().catch(() => ({ ok: false, error: "Réponse illisible du serveur Onde." }))), status: r.status };
+  }
+  if (!v?.ok) throw Object.assign(new Error(v?.error || "Erreur du serveur Onde."), { code: v?.code, status: v?.status }) as AccountError;
+  return v;
+}
+
+/** Sons d'une équipe déjà téléchargés sur l'ordinateur : identifiant → chemin. */
+export async function teamPresent(teamName: string, items: { id: string; fileName: string }[]): Promise<Record<string, string>> {
+  return inTauri ? invoke<Record<string, string>>("team_present", { teamName, items }) : {};
+}
+
+/** Télécharge un son d'équipe dans le dossier de l'équipe et renvoie son chemin. */
+export async function teamFile(teamName: string, id: string, fileName: string, url: string): Promise<string> {
+  return inTauri ? invoke<string>("team_file", { teamName, id, fileName, url }) : "";
+}
+
 /** Les comptes (Onde Équipe) sont-ils ouverts côté serveur ? Dans un navigateur de test : toujours. */
 export async function accountsOpen(): Promise<boolean> {
   if (inTauri) return invoke<boolean>("accounts_open").catch(() => false);

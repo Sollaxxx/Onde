@@ -6,7 +6,7 @@ import { errText, getLang, t, tn } from "./i18n";
 interface Member { id: string; email: string; name: string; role: Role; joinedAt: string }
 interface PendingInvite { id: string; email: string; role: Role; createdAt: string; expiresAt: string }
 type Role = "proprietaire" | "membre";
-interface Team {
+export interface Team {
   id: string; name: string; plan: string; planName: string; seats: number; storageGb: number;
   status: "essai" | "actif" | "suspendu"; trialUntil: string | null; active: boolean; role: Role;
   members?: Member[]; invitations?: PendingInvite[]; seatsUsed?: number;
@@ -17,11 +17,15 @@ interface Account { id: string; email: string; name: string }
 export interface AccountHost {
   render: () => void;
   toast: (msg: string) => void;
+  /** Les équipes du compte ont changé (connexion, invitation acceptée, déconnexion…). */
+  teamsChanged: (teams: Team[], accountId: string | null) => void;
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString(getLang() === "en" ? "en-US" : "fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "");
 const CONTACT = "contact.ondesound@gmail.com";
+const TESTER = "onde.testeur";
+const tester = () => { try { return localStorage.getItem(TESTER) === "1"; } catch { return false; } };
 
 export function createAccount(host: AccountHost) {
   const st = {
@@ -56,6 +60,7 @@ export function createAccount(host: AccountHost) {
         try { return { ...team, ...(await api.accountApi("GET", `equipe/${team.id}`)).team }; } catch { return team; }
       }));
       st.error = "";
+      host.teamsChanged(st.teams, st.account?.id ?? null);
     } catch (e) {
       if ((e as { status?: number }).status === 401) signOutLocally();
       else fail(e);
@@ -72,6 +77,7 @@ export function createAccount(host: AccountHost) {
     st.step = "email";
     st.code = "";
     st.confirmDelete = false;
+    host.teamsChanged([], null);
   }
 
   async function run(key: string, job: () => Promise<void>): Promise<void> {
@@ -207,7 +213,17 @@ export function createAccount(host: AccountHost) {
     /** Au démarrage : une session existe-t-elle sur cet ordinateur ? (rien n'est chargé tant qu'on n'ouvre pas les Réglages) */
     async init(): Promise<void> {
       st.signedIn = await api.accountSignedIn().catch(() => false);
-      st.visible = st.signedIn || (await api.accountsOpen());
+      st.visible = st.signedIn || tester() || (await api.accountsOpen());
+      if (st.signedIn) void load(); // équipes à jour dès le démarrage (sons et playlists partagés)
+    },
+
+    /** Mode testeur (5 clics sur la version dans À propos) : la section Compte apparaît même si les comptes sont fermés. */
+    async toggleTester(): Promise<boolean> {
+      const on = !tester();
+      try { if (on) localStorage.setItem(TESTER, "1"); else localStorage.removeItem(TESTER); } catch { /* sans stockage */ }
+      st.visible = st.signedIn || on || (await api.accountsOpen());
+      host.render();
+      return on;
     },
 
     /** La section Compte est-elle montrée ? (Onde Équipe n'est pas encore ouvert à tous) */

@@ -864,7 +864,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, resolve_status, install_resolve_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, accounts_open, compte::account_api, compte::account_signed_in, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
+        .invoke_handler(tauri::generate_handler![get_catalog, library_dir, default_library_dir, set_library_dir, ensure_local, drag_icon_path, send_feedback, premiere_status, install_premiere_panel, resolve_status, install_resolve_panel, contributions_open, read_audio, send_contribution, mark_dragged, cleanup_info, set_cleanup_days, local_sounds, accounts_open, compte::account_api, compte::account_signed_in, compte::team_upload, compte::team_present, compte::team_file, perso::get_user_dirs, perso::add_user_dir, perso::remove_user_dir, perso::scan_user_sounds, perso::analyze_user_sounds])
         .run(tauri::generate_context!())
         .expect("Onde n'a pas pu démarrer");
 }

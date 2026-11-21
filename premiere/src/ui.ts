@@ -8,6 +8,27 @@ import type { Sound } from "../../src/types";
 import { collate, errText, getLang, soundTitle, t, tn } from "../../src/i18n";
 
 export const CDN = "https://pub-fd954b41e9a74a869ad359c2b577f7a3.r2.dev";
+/** Site d'Onde : comptes et sons d'équipe (Onde Équipe). */
+export const SITE = "https://ondesound.com";
+
+/** Contenu des équipes du compte connecté dans l'application Onde (sons et playlists partagés). */
+export interface TeamContent {
+  teams: { id: string; name: string }[];
+  sounds: { teamId: string; id: string; title: string; fileName: string; durationMs: number; peaks: number[]; tags: string[]; format: string; url: string }[];
+  playlists: { teamId: string; id: string; name: string; ids: string[] }[];
+}
+
+/** Même rangement que l'application (compte.rs) : <dossier des sons>/Equipes/<équipe>/<nom>_<id8>.<ext> */
+export function folderName(name: string): string {
+  const clean = [...name].map((c) => (c.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(c) ? "_" : c)).join("").trim().replace(/^\.+|\.+$/g, "").trim().slice(0, 60);
+  return clean || "Equipe";
+}
+export function teamFileName(id: string, fileName: string): string {
+  const dot = fileName.lastIndexOf(".");
+  const stem = folderName(dot > 0 ? fileName.slice(0, dot) : fileName);
+  const ext = dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+  return `${stem}_${id.slice(0, 8)}.${ext && ext.length <= 5 && /^[a-z0-9]+$/.test(ext) ? ext : "wav"}`;
+}
 
 export interface Host {
   /** Le panneau peut glisser un fichier vers la timeline. */
@@ -29,6 +50,8 @@ export interface Host {
   dropHint?(title: string): string;
   /** Glisser-déposer natif du système, à la place de setDragData (panneau Electron de Resolve). */
   startNativeDrag?(path: string): void;
+  /** Sons et playlists des équipes du compte connecté dans l'application Onde (null : pas connecté, ou pas d'équipe). */
+  teamContent?(): Promise<TeamContent | null>;
 }
 
 const PAGE = 60;
@@ -45,6 +68,10 @@ export function startPanel(host: Host): void {
 
   const state = {
     catalog: [] as Sound[],
+    team: null as TeamContent | null,
+    teamSounds: [] as Sound[],
+    scope: "all", // "all", "team:<id>" ou "pl:<id>"
+    query: "",
     results: [] as Sound[],
     limit: PAGE,
     selId: null as string | null,
@@ -60,8 +87,10 @@ export function startPanel(host: Host): void {
   const statusEl = $("status");
   const player = $<HTMLMediaElement>("player");
   const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-  const byId = (id: string | null) => state.catalog.find((s) => s.id === id) ?? null;
-  const soundUrl = (s: Sound) => `${CDN}/sons/${encodeURIComponent(s.file)}`;
+  const index = new Map<string, Sound>();
+  const byId = (id: string | null) => (id ? index.get(id) ?? null : null);
+  const soundUrl = (s: Sound) => s.remote ?? `${CDN}/sons/${encodeURIComponent(s.file)}`;
+  const reindex = () => { index.clear(); for (const s of [...state.catalog, ...state.teamSounds]) index.set(s.id, s); };
 
   /** Remonte l'arbre jusqu'à l'élément qui porte l'attribut (UXP n'a pas toujours closest ni dataset). */
   function up(el: EventTarget | null, attr: string): HTMLElement | null {
@@ -84,7 +113,10 @@ export function startPanel(host: Host): void {
     if (known) return Promise.resolve(known);
     let job = state.inflight.get(s.id);
     if (job) return job;
-    const dest = [state.libDir, s.code, s.file].join(host.sep);
+    const teamName = s.team ? state.team?.teams.find((x) => x.id === s.team)?.name ?? "" : "";
+    const dest = s.team
+      ? [state.libDir, "Equipes", folderName(teamName), teamFileName(s.id.slice(3), s.file)].join(host.sep)
+      : [state.libDir, s.code, s.file].join(host.sep);
     job = host.download(soundUrl(s), dest).then(() => {
       state.local.set(s.id, dest);
       state.inflight.delete(s.id);
@@ -196,8 +228,18 @@ export function startPanel(host: Host): void {
     listEl.scrollTop = top;
   }
 
+  function scopeList(): Sound[] {
+    if (state.scope.startsWith("team:")) return state.teamSounds.filter((s) => s.team === state.scope.slice(5));
+    if (state.scope.startsWith("pl:")) {
+      const p = state.team?.playlists.find((x) => x.id === state.scope.slice(3));
+      return (p?.ids ?? []).map((id) => byId(id)).filter((s): s is Sound => !!s);
+    }
+    return [...state.catalog, ...state.teamSounds];
+  }
+
   function runSearch(q: string): void {
-    state.results = search(state.catalog, q);
+    state.query = q;
+    state.results = search(scopeList(), q);
     state.limit = PAGE;
     $("count").textContent = tn(state.results.length, "{n} SON", "{n} SONS");
     listEl.scrollTop = 0;
@@ -226,12 +268,55 @@ export function startPanel(host: Host): void {
     timer = setTimeout(() => runSearch(v), 120);
   });
 
+  // ---------- Équipe (Onde Équipe) ----------
+  function scopeMenu(): void {
+    let sel = document.getElementById("scope") as HTMLSelectElement | null;
+    if (!state.team?.teams.length) { sel?.remove(); state.scope = "all"; return; }
+    if (!sel) {
+      sel = document.createElement("select");
+      sel.id = "scope";
+      sel.setAttribute("aria-label", t("Où chercher"));
+      sel.addEventListener("change", () => { state.scope = sel!.value; runSearch(state.query); });
+      document.getElementById("q")?.parentElement?.appendChild(sel);
+    }
+    const opts = [`<option value="all">${t("Toute la bibliothèque")}</option>`];
+    for (const team of state.team.teams) {
+      opts.push(`<option value="team:${team.id}">${esc(t("Équipe · {name}", { name: team.name }))}</option>`);
+      for (const p of state.team.playlists.filter((x) => x.teamId === team.id)) opts.push(`<option value="pl:${p.id}">— ${esc(p.name)}</option>`);
+    }
+    sel.innerHTML = opts.join("");
+    if (![...sel.options].some((o) => o.value === state.scope)) state.scope = "all";
+    sel.value = state.scope;
+  }
+
+  async function loadTeam(): Promise<void> {
+    if (!host.teamContent) return;
+    try {
+      const c = await host.teamContent();
+      state.team = c;
+      const names = new Map((c?.teams ?? []).map((x) => [x.id, x.name]));
+      state.teamSounds = (c?.sounds ?? []).map((r) => ({
+        id: `eq-${r.id}`, title: r.title, titleEn: r.title, code: "EQP", category: names.get(r.teamId) ?? "", tags: r.tags ?? [],
+        durationMs: r.durationMs, file: r.fileName, format: r.format, license: "Son de l'équipe", peaks: r.peaks ?? [],
+        team: r.teamId, remote: r.url,
+      }));
+      reindex();
+      scopeMenu();
+      if (state.catalog.length) runSearch(state.query);
+    } catch { /* pas de réseau : on garde ce qu'on avait */ }
+  }
+  // Les liens des sons d'équipe durent 12 h : on recharge régulièrement, et quand le panneau revient au premier plan
+  setInterval(() => void loadTeam(), 10 * 60_000);
+  window.addEventListener("focus", () => void loadTeam());
+
   void (async () => {
     try {
       state.libDir = await host.libraryDir();
       const data = await host.getJson(`${CDN}/catalogue/v1.json`);
       state.catalog = (data.sounds as Sound[]).sort((a, b) => collate(soundTitle(a), soundTitle(b)));
+      reindex();
       runSearch("");
+      void loadTeam();
       status(host.canDrag ? t("Glissez un son vers la timeline, ou cliquez Insérer.") : t("Cliquez Insérer pour poser un son à la tête de lecture."));
     } catch (e) {
       status(t("Impossible de charger la bibliothèque : {e}", { e: errText(e) }), "err");

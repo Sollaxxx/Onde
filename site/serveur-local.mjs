@@ -8,6 +8,7 @@ import { extname, join, normalize } from "node:path";
 import * as compte from "./functions/api/compte/[[chemin]].js";
 import * as equipe from "./functions/api/equipe/[[chemin]].js";
 import * as admin from "./functions/api/admin/[[chemin]].js";
+import * as fichier from "./functions/api/fichier-equipe/[[chemin]].js";
 import { checkAdmin } from "./lib/onde.js";
 
 const sqlite = new DatabaseSync(":memory:");
@@ -17,23 +18,32 @@ const stmt = (sql, args = []) => ({
   first: async () => sqlite.prepare(sql).get(...args) ?? null,
   all: async () => ({ results: sqlite.prepare(sql).all(...args) }),
 });
-const env = { DB: { prepare: (sql) => stmt(sql), batch: async (l) => { for (const s of l) await s.run(); } }, ONDE_DEV: "1", ADMIN_MOT_DE_PASSE: "admin" };
+// Stockage privé des équipes simulé en mémoire (R2)
+const files = new Map();
+const EQUIPES = {
+  put: async (k, v, o) => { files.set(k, { data: Buffer.from(v), meta: o?.httpMetadata }); },
+  get: async (k, o) => { const x = files.get(k); if (!x) return null; return { body: o?.range ? x.data.subarray(o.range.offset, o.range.offset + o.range.length) : x.data, httpMetadata: x.meta }; },
+  head: async (k) => { const x = files.get(k); return x ? { httpMetadata: x.meta } : null; },
+  delete: async (k) => { files.delete(k); },
+};
+const env = { EQUIPES, DB: { prepare: (sql) => stmt(sql), batch: async (l) => { for (const s of l) await s.run(); } }, ONDE_DEV: "1", ADMIN_MOT_DE_PASSE: "admin" };
 const ROOT = new URL("./public/", import.meta.url).pathname;
 const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".png": "image/png" };
 const port = Number(process.argv[2] || 8787);
 
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${port}`);
-  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Onde-Langue", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" };
+  const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Onde-Langue, X-Onde-Meta, Range", "Access-Control-Expose-Headers": "Content-Range, Content-Length", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" };
   if (req.method === "OPTIONS") { res.writeHead(204, cors); res.end(); return; }
   const chunks = []; for await (const c of req) chunks.push(c);
   const body = chunks.length ? Buffer.concat(chunks) : undefined;
   const request = new Request(url, { method: req.method, headers: { ...req.headers, "CF-Connecting-IP": "127.0.0.1" }, body: ["GET", "HEAD"].includes(req.method) ? undefined : body });
-  const m = /^\/api\/(compte|equipe|admin)(?:\/(.*))?$/.exec(url.pathname);
+  const m = /^\/api\/(compte|equipe|admin|fichier-equipe)(?:\/(.*))?$/.exec(url.pathname);
   let response;
   if (m) {
-    const mod = { compte, equipe, admin }[m[1]];
-    response = await mod.onRequest({ request, env, params: { chemin: (m[2] || "").split("/").filter(Boolean) } });
+    const params = { chemin: (m[2] || "").split("/").filter(Boolean) };
+    if (m[1] === "fichier-equipe") response = await (req.method === "HEAD" ? fichier.onRequestHead : fichier.onRequestGet)({ request, env, params });
+    else response = await { compte, equipe, admin }[m[1]].onRequest({ request, env, params });
   } else {
     if (url.pathname.startsWith("/admin")) response = checkAdmin(request, env);
     if (!response) {
