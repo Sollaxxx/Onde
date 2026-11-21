@@ -326,7 +326,7 @@ function settingsScreen(): string {
 
       <section id="r-about" class="about" aria-labelledby="h-about">
         <div>
-          <h2 id="h-about">Onde ${esc(state.version)} · open-source</h2>
+          <h2 id="h-about" data-act="about-tap">Onde ${esc(state.version)} · open-source</h2>
           <span>${t("Gratuit, et ça s'entend. Code publié sous licence AGPL-3.0.")}</span>
         </div>
         <div class="btns"><button class="secondary" data-act="open-site">ondesound.com</button><button class="secondary" data-act="replay-accueil">${t("Revoir l'accueil")}</button><span class="badge">${t("SOUTIEN BIENTÔT")}</span></div>
@@ -361,6 +361,8 @@ function winButtons(): string {
 }
 
 // ---------- Compte et équipe ----------
+let aboutTaps = 0;
+let aboutLast = 0;
 const teams = createTeams({
   changed: () => render(),
   located: (id, path) => { state.paths.set(id, path); state.local.add(id); },
@@ -951,6 +953,19 @@ root.addEventListener("click", async (e) => {
     case "replay-accueil": {
       if (!introWanted()) { await openAccueil(); return; }
       await playIntro(openAccueil().then(nextFrame));
+      return;
+    }
+    case "about-tap": {
+      // 5 clics rapides sur la version : mode testeur (section Compte visible avant l'ouverture à tous)
+      const now = Date.now();
+      aboutTaps = now - aboutLast < 1500 ? aboutTaps + 1 : 1;
+      aboutLast = now;
+      if (aboutTaps >= 5) {
+        aboutTaps = 0;
+        const on = await account.toggleTester();
+        toast(on ? t("Mode testeur activé : la section Compte est visible.") : t("Mode testeur désactivé."));
+        if (on) document.getElementById("r-compte")?.scrollIntoView({ behavior: "smooth" });
+      }
       return;
     }
     case "more": state.limit += 300; render(); return;

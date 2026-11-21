@@ -24,6 +24,8 @@ export interface AccountHost {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString(getLang() === "en" ? "en-US" : "fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "");
 const CONTACT = "contact.ondesound@gmail.com";
+const TESTER = "onde.testeur";
+const tester = () => { try { return localStorage.getItem(TESTER) === "1"; } catch { return false; } };
 
 export function createAccount(host: AccountHost) {
   const st = {
@@ -211,8 +213,17 @@ export function createAccount(host: AccountHost) {
     /** Au démarrage : une session existe-t-elle sur cet ordinateur ? (rien n'est chargé tant qu'on n'ouvre pas les Réglages) */
     async init(): Promise<void> {
       st.signedIn = await api.accountSignedIn().catch(() => false);
-      st.visible = st.signedIn || (await api.accountsOpen());
+      st.visible = st.signedIn || tester() || (await api.accountsOpen());
       if (st.signedIn) void load(); // équipes à jour dès le démarrage (sons et playlists partagés)
+    },
+
+    /** Mode testeur (5 clics sur la version dans À propos) : la section Compte apparaît même si les comptes sont fermés. */
+    async toggleTester(): Promise<boolean> {
+      const on = !tester();
+      try { if (on) localStorage.setItem(TESTER, "1"); else localStorage.removeItem(TESTER); } catch { /* sans stockage */ }
+      st.visible = st.signedIn || on || (await api.accountsOpen());
+      host.render();
+      return on;
     },
 
     /** La section Compte est-elle montrée ? (Onde Équipe n'est pas encore ouvert à tous) */
