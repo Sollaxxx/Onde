@@ -43,10 +43,18 @@ fn forget(app: &AppHandle) {
 }
 
 /// Le chemin est-il une route de compte ou d'équipe ? (l'interface ne peut pas appeler autre chose)
+/// Seul paramètre accepté : `?v=<nombre>` (version du contenu d'une équipe déjà connue).
 fn allowed(path: &str) -> bool {
-    (path.starts_with("compte/") || path.starts_with("equipe/"))
-        && !path.contains("..")
-        && path.chars().all(|c| c.is_ascii_alphanumeric() || "/-_".contains(c))
+    let (route, query) = path.split_once('?').unwrap_or((path, ""));
+    let query_ok = query.is_empty()
+        || query.strip_prefix("v=").is_some_and(|v| {
+            let digits = v.strip_prefix('-').unwrap_or(v);
+            !digits.is_empty() && digits.len() <= 12 && digits.chars().all(|c| c.is_ascii_digit())
+        });
+    (route.starts_with("compte/") || route.starts_with("equipe/"))
+        && !route.contains("..")
+        && route.chars().all(|c| c.is_ascii_alphanumeric() || "/-_.".contains(c))
+        && query_ok
 }
 
 /// Appelle l'API des comptes du site d'Onde. Renvoie toujours le JSON de la réponse, avec son `status` :
@@ -285,6 +293,11 @@ mod tests {
         assert!(!allowed("admin/equipes"));
         assert!(!allowed("compte/../admin/equipes"));
         assert!(!allowed("compte/moi?x=1"));
+        assert!(allowed("equipe/1234-abcd/contenu?v=-1"));
+        assert!(allowed("equipe/1234-abcd/contenu?v=12"));
+        assert!(!allowed("equipe/1234-abcd/contenu?v=12&x=1"));
+        assert!(!allowed("equipe/1234-abcd/contenu?v="));
+        assert!(allowed("equipe/1234-abcd/playlists/p1/sons/bsb-0003"));
         assert!(!allowed("https://ailleurs.com/compte/moi"));
     }
 }
